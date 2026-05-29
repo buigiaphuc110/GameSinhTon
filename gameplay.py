@@ -13,7 +13,7 @@ WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 FPS = 60
 
-# --- HELPERS (Giữ nguyên) ---
+# --- HELPERS ---
 def is_on_screen(x, y, camera_x, camera_y, width, height, buffer=200):
     return (camera_x - buffer <= x <= camera_x + width + buffer) and (camera_y - buffer <= y <= camera_y + height + buffer)
 
@@ -77,13 +77,11 @@ class DangerExplosion:
                 self.last_frame_time = current_time
                 if self.frame_index >= len(self.frames):
                     self.state = "DONE"
-                    return
+                    return 0
             if self.frame_index == 3 and not self.has_dealt_damage:
                 if math.hypot(player.x - self.x, player.y - self.y) < self.hitbox_radius + player.radius:
-                    dmg = 20
-                    if player_shield > 0: return dmg 
-                    else: player.take_damage_and_knockback(dmg, self.x, self.y, 25, width, height, mode_name)
                     self.has_dealt_damage = True
+                    return 20 
         return 0
 
     def draw(self, screen, camera_x=0, camera_y=0):
@@ -149,10 +147,10 @@ class EnemyNor:
         self.rect = pygame.Rect(0, 0, self.frames[0].get_width(), self.frames[0].get_height()) if self.frames else pygame.Rect(0, 0, 32, 32)
 
     def take_damage(self, amount):
-        self.health -= amount
+        self.health = max(0, self.health - amount)
         return self.health <= 0 
 
-    def update(self, player, dt, width, height, mode_name, player_shield=0):
+    def update(self, player, dt, width, height, mode_name, player_shield, active_projectiles):
         dx, dy = player.x - self.x, player.y - self.y
         dist = math.hypot(dx, dy)
         if dist > 0:
@@ -169,10 +167,7 @@ class EnemyNor:
         if dist < self.radius + player.radius:
             if current_time - self.last_damage_time > self.damage_cooldown:
                 self.last_damage_time = current_time
-                if player_shield > 0: return self.base_damage
-                if hasattr(player, 'take_damage_and_knockback'):
-                    player.take_damage_and_knockback(self.base_damage, self.x, self.y, 10, width, height, mode_name)
-                else: player.health -= self.base_damage
+                return self.base_damage
         return 0
 
     def draw(self, screen, camera_x, camera_y):
@@ -180,11 +175,12 @@ class EnemyNor:
         draw_x, draw_y = int(self.x - camera_x), int(self.y - camera_y)
         rotated_img = pygame.transform.rotate(self.frames[self.frame_index], self.angle)
         screen.blit(rotated_img, rotated_img.get_rect(center=(draw_x, draw_y)))
-        if self.health < self.max_health: 
+        
+        if self.health < self.max_health and self.health > 0: 
             bx, by = draw_x - 10, draw_y - 20
             pygame.draw.rect(screen, (0, 0, 0), (bx - 1, by - 1, 22, 5))
             pygame.draw.rect(screen, (50, 15, 15), (bx, by, 20, 3))
-            if self.health > 0: pygame.draw.rect(screen, (60, 230, 60), (bx, by, int(20 * (self.health / self.max_health)), 3))
+            pygame.draw.rect(screen, (60, 230, 60), (bx, by, max(0, int(20 * (self.health / self.max_health))), 3))
 
 class EnemyNorBig(EnemyNor):
     def __init__(self, x, y, frames):
@@ -199,11 +195,11 @@ class EnemyNorBig(EnemyNor):
 
     def draw(self, screen, camera_x, camera_y):
         super().draw(screen, camera_x, camera_y)
-        if self.health < self.max_health: 
+        if self.health < self.max_health and self.health > 0: 
             bx, by = int(self.x - camera_x) - 20, int(self.y - camera_y) - 40
             pygame.draw.rect(screen, (0, 0, 0), (bx - 1, by - 1, 42, 6))
             pygame.draw.rect(screen, (50, 15, 15), (bx, by, 40, 4))
-            if self.health > 0: pygame.draw.rect(screen, (60, 230, 60), (bx, by, int(40 * (self.health / self.max_health)), 4))
+            pygame.draw.rect(screen, (60, 230, 60), (bx, by, max(0, int(40 * (self.health / self.max_health))), 4))
 
 class PoisonBullet:
     def __init__(self, x, y, target_x, target_y):
@@ -242,7 +238,7 @@ class EnemyNorGreen(EnemyNor):
             colored_frames.append(new_f)
         self.frames = colored_frames
 
-    def update(self, player, dt, width, height, mode_name, active_projectiles):
+    def update(self, player, dt, width, height, mode_name, player_shield, active_projectiles):
         dx, dy = player.x - self.x, player.y - self.y
         dist = math.hypot(dx, dy)
         self.angle = math.degrees(math.atan2(-dy, dx))
@@ -263,6 +259,12 @@ class EnemyNorGreen(EnemyNor):
         if dist < 400 and current_time - self.last_shot_time > self.fire_rate:
             active_projectiles.append(PoisonBullet(self.x, self.y, player.x, player.y))
             self.last_shot_time = current_time
+            
+        if dist < self.radius + player.radius:
+            if current_time - self.last_damage_time > self.damage_cooldown:
+                self.last_damage_time = current_time
+                return self.base_damage
+        return 0
 
 class EnemyNorOrange(EnemyNor):
     def __init__(self, x, y, frames):
@@ -280,16 +282,19 @@ class EnemyNorOrange(EnemyNor):
             colored_frames.append(new_f)
         self.frames = colored_frames
 
+# ----------------- SMOOTH EXPLOSIONS -----------------
 class OrangeExplosion:
     def __init__(self, x, y):
         self.x, self.y = x, y
-        self.radius, self.max_radius, self.life = 5, 80, 255
+        self.radius = 5
+        self.max_radius = 80
+        self.life = 255
         self.has_dealt_damage = False
 
     def update(self, player):
-        self.radius += 8
-        self.life -= 15
-        if self.radius >= self.max_radius and self.life > 0 and not self.has_dealt_damage:
+        self.radius += (self.max_radius - self.radius) * 0.15 + 2
+        self.life -= 12
+        if self.radius >= self.max_radius * 0.75 and self.life > 0 and not self.has_dealt_damage:
             if math.hypot(player.x - self.x, player.y - self.y) < self.max_radius:
                 self.has_dealt_damage = True
                 return True 
@@ -298,11 +303,42 @@ class OrangeExplosion:
     def draw(self, screen, camera_x, camera_y):
         if self.life > 0:
             surf = pygame.Surface((self.max_radius*2, self.max_radius*2), pygame.SRCALPHA)
-            pygame.draw.circle(surf, (255, 120, 0, max(0, self.life)), (self.max_radius, self.max_radius), int(self.radius))
+            pygame.draw.circle(surf, (255, 150, 50, max(0, self.life)), (self.max_radius, self.max_radius), int(self.radius * 0.6))
+            pygame.draw.circle(surf, (255, 80, 0, max(0, int(self.life*0.6))), (self.max_radius, self.max_radius), int(self.radius), 4)
+            screen.blit(surf, (int(self.x - camera_x - self.max_radius), int(self.y - camera_y - self.max_radius)))
+
+class KaboomExplosion:
+    def __init__(self, x, y, level):
+        self.x, self.y = x, y
+        self.radius = 5
+        self.max_radius = 100 + (level * 30)
+        self.life = 255
+        self.level, self.damage = level, 30 * level
+        self.has_dealt_damage = False
+
+    def update(self, enemies):
+        self.radius += (self.max_radius - self.radius) * 0.25 + 3
+        self.life -= 15
+        if self.radius >= self.max_radius * 0.6 and not self.has_dealt_damage:
+            self.has_dealt_damage = True
+            for e in enemies:
+                dist = math.hypot(e.x - self.x, e.y - self.y)
+                if dist < self.max_radius:
+                    e.take_damage(self.damage)
+                    if dist > 0:
+                        e.x += ((e.x - self.x) / dist) * 40
+                        e.y += ((e.y - self.y) / dist) * 40
+
+    def draw(self, screen, camera_x, camera_y):
+        if self.life > 0:
+            surf = pygame.Surface((self.max_radius*2, self.max_radius*2), pygame.SRCALPHA)
+            pygame.draw.circle(surf, (200, 50, 50, max(0, int(self.life*0.5))), (self.max_radius, self.max_radius), int(self.radius))
+            pygame.draw.circle(surf, (255, 200, 50, max(0, self.life)), (self.max_radius, self.max_radius), int(self.radius*0.7))
+            pygame.draw.circle(surf, (255, 255, 200, max(0, self.life)), (self.max_radius, self.max_radius), int(self.radius), 3)
             screen.blit(surf, (int(self.x - camera_x - self.max_radius), int(self.y - camera_y - self.max_radius)))
 
 # ==========================================
-# CÁC KỸ NĂNG TỪ BUFF (MAGIC, KABOOM...)
+# CÁC KỸ NĂNG TỪ BUFF
 # ==========================================
 class MagicOrb:
     def __init__(self):
@@ -324,33 +360,6 @@ class MagicOrb:
                 if math.hypot(e.x - ox, e.y - oy) < 30:
                     e.take_damage(self.damage * level)
                     e.speed = max(10, e.speed - 15)
-
-class KaboomExplosion:
-    def __init__(self, x, y, level):
-        self.x, self.y = x, y
-        self.radius, self.max_radius, self.life = 5, 100 + (level * 30), 255
-        self.level, self.damage = level, 30 * level
-        self.has_dealt_damage = False
-
-    def update(self, enemies):
-        self.radius += 12
-        self.life -= 15
-        if self.radius >= self.max_radius and self.life > 0 and not self.has_dealt_damage:
-            self.has_dealt_damage = True
-            for e in enemies:
-                dist = math.hypot(e.x - self.x, e.y - self.y)
-                if dist < self.max_radius:
-                    e.take_damage(self.damage)
-                    if dist > 0:
-                        e.x += ((e.x - self.x) / dist) * 40
-                        e.y += ((e.y - self.y) / dist) * 40
-
-    def draw(self, screen, camera_x, camera_y):
-        if self.life > 0:
-            surf = pygame.Surface((self.max_radius*2, self.max_radius*2), pygame.SRCALPHA)
-            pygame.draw.circle(surf, (200, 50, 50, max(0, self.life)), (self.max_radius, self.max_radius), int(self.radius))
-            pygame.draw.circle(surf, (255, 200, 50, max(0, self.life)), (self.max_radius, self.max_radius), int(self.radius*0.6))
-            screen.blit(surf, (int(self.x - camera_x - self.max_radius), int(self.y - camera_y - self.max_radius)))
 
 # ==========================================
 # CẤU HÌNH WAVE VÀ BUFF UI
@@ -379,34 +388,65 @@ BUFF_DESCS = {
     'magic': "Magic orbs orbit & slow enemies"
 }
 
+# --- SMOOTH BUFF CARD UI ---
 def draw_buff_card(screen, font, title, desc, rect, is_hover, level, buff_images):
-    bg_color = (60, 60, 80) if not is_hover else (80, 80, 100)
-    pygame.draw.rect(screen, bg_color, rect, border_radius=10)
-    pygame.draw.rect(screen, (200, 200, 50), rect, width=3, border_radius=10)
+    card_rect = rect.inflate(10, 10) if is_hover else rect
+    shape_surf = pygame.Surface(card_rect.size, pygame.SRCALPHA)
+    pygame.draw.rect(shape_surf, (40, 40, 60, 230), shape_surf.get_rect(), border_radius=15)
     
-    draw_text_with_shadow(title.upper(), font, (255, 215, 0), screen, rect.centerx, rect.y + 30)
-    draw_text_with_shadow(f"Level: {level+1}/3", font, WHITE, screen, rect.centerx, rect.y + 60)
+    if is_hover:
+        pygame.draw.rect(shape_surf, (255, 215, 0), shape_surf.get_rect(), width=4, border_radius=15)
+        glow = pygame.Surface(card_rect.size, pygame.SRCALPHA)
+        pygame.draw.rect(glow, (255, 215, 0, 50), glow.get_rect(), border_radius=15)
+        shape_surf.blit(glow, (0, 0))
+    else:
+        pygame.draw.rect(shape_surf, (100, 100, 150), shape_surf.get_rect(), width=2, border_radius=15)
+        
+    screen.blit(shape_surf, card_rect.topleft)
+    draw_text_with_shadow(title.upper(), font, (255, 215, 0) if is_hover else (200, 200, 200), screen, card_rect.centerx, card_rect.y + 30)
+    
+    lvl_color = (100, 255, 100) if level > 0 else WHITE
+    draw_text_with_shadow(f"Lv: {level} -> {level+1}", font, lvl_color, screen, card_rect.centerx, card_rect.y + 60)
     
     if title in buff_images and buff_images[title]:
-        screen.blit(buff_images[title], buff_images[title].get_rect(center=(rect.centerx, rect.y + 110)))
+        img = pygame.transform.scale(buff_images[title], (80, 80))
+        screen.blit(img, img.get_rect(center=(card_rect.centerx, card_rect.y + 130)))
     
     words = desc.split(' ')
-    y_offset, line = 160, ""
+    y_offset, line = 190, ""
     for w in words:
-        if font.size(line + w)[0] < rect.width - 20: line += w + " "
+        if font.size(line + w)[0] < card_rect.width - 30: line += w + " "
         else:
-            draw_text_with_shadow(line, font, (200, 220, 255), screen, rect.centerx, rect.y + y_offset)
+            draw_text_with_shadow(line, font, (220, 230, 255), screen, card_rect.centerx, card_rect.y + y_offset)
             line, y_offset = w + " ", y_offset + 25
-    draw_text_with_shadow(line, font, (200, 220, 255), screen, rect.centerx, rect.y + y_offset)
+    draw_text_with_shadow(line, font, (220, 230, 255), screen, card_rect.centerx, card_rect.y + y_offset)
 
+# HÀM LOAD ẢNH BUFF THÔNG MINH CHỐNG LỖI HIỂN THỊ COIN
 def load_buff_images():
     images = {}
-    for b in BUFF_TYPES:
-        path = os.path.join('buff', f'{b}.png')
-        if os.path.exists(path):
-            try: images[b] = pygame.transform.scale(pygame.image.load(path).convert_alpha(), (60, 60))
-            except: images[b] = None
-        else: images[b] = None
+    colors = [(255,100,100), (100,255,100), (100,100,255), (255,200,50), (255,100,255), (100,255,255), (200,200,200), (150,150,150)]
+    for i, b in enumerate(BUFF_TYPES):
+        loaded = False
+        # Thử mọi định dạng và kiểu viết hoa/thường để tránh lỗi file
+        for ext in ['.png', '.PNG', '.jpg', '.JPG']:
+            for name_variant in [b, b.capitalize(), b.upper()]:
+                path = os.path.join('buff', f'{name_variant}{ext}')
+                if os.path.exists(path):
+                    try: 
+                        images[b] = pygame.transform.smoothscale(pygame.image.load(path).convert_alpha(), (60, 60))
+                        loaded = True
+                        break
+                    except: pass
+            if loaded: break
+            
+        # NẾU THIẾU ẢNH: Tạo biểu tượng chữ cái bù đắp đẹp mắt
+        if not loaded: 
+            dummy = pygame.Surface((60, 60), pygame.SRCALPHA)
+            pygame.draw.circle(dummy, colors[i%len(colors)], (30,30), 25)
+            font_small = pygame.font.SysFont(None, 28, bold=True)
+            text = font_small.render(b[:2].upper(), True, BLACK)
+            dummy.blit(text, text.get_rect(center=(30, 30)))
+            images[b] = dummy
     return images
 
 def load_game_entities(game_assets):
@@ -545,7 +585,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
     all_obstacles = dirts + rocks + trees
     player = Player(WIDTH // 2, HEIGHT // 2)
     
-    # Hàm load ảnh vũ khí dùng cho MULTI-WEAPON X2 BUFF
     def get_weapon_image():
         path = f"weapon/{weapon.SELECTED_WEAPON}.png"
         if os.path.exists(path):
@@ -557,24 +596,21 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         pygame.draw.line(w_img, (200, 200, 200), (5, 35), (35, 5), 5)
         return w_img
 
-    # HỆ THỐNG DANH SÁCH VŨ KHÍ (Mặc định 1 cái)
     player_weapons = [weapon.WeaponEntity(get_weapon_image())]
-    player_special = special.SpecialSkill()
-    
+    player_special = special.SpecialSkillManager(player) # Fix lỗi không truyền player vào SpecialSkill
     score.game_score.reset_score()
     
     active_dangers, active_lavas, active_endless_entities = [], [], []
     danger_spawn_timer, lava_spawn_timer = 3.0, 0.0
     player_in_lava = False
 
-    # --- WAVE SYSTEM & BUFF VARIABLES ---
     current_wave = 1
     max_waves = 10 if mode_name != 'ENDLESS' else 999999
     enemies_to_spawn = get_wave_enemies(mode_name, current_wave)
     active_enemies = []
     enemy_projectiles = []
     enemy_spawn_timer = 0.5
-    game_state = "PLAYING" # PLAYING, CHOOSING_BUFF, WAVE_TRANSITION, WON
+    game_state = "PLAYING" 
     transition_timer = 0
 
     player_buffs = {b: 0 for b in BUFF_TYPES}
@@ -596,7 +632,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         camera_x, camera_y = (int(player.x) - WIDTH // 2, int(player.y) - HEIGHT // 2) if mode_name == 'ENDLESS' else (0, 0)
         current_time = pygame.time.get_ticks()
 
-        # EVENT HANDLING
         click_x, click_y = -1, -1
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
@@ -612,7 +647,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     
                     is_special = player_special.on_player_throw_weapon(weapon.SELECTED_WEAPON, target_x, target_y, player.x, player.y)
                     if not is_special:
-                        # CHỈNH SỬA: Ném tất cả vũ khí cùng lúc lan tỏa (Spread shot)
                         spread_angles = [0, -15, 15, -30, 30, -45, 45]
                         orbiting_weapons = [pw for pw in player_weapons if pw.state == 'orbit']
                         
@@ -626,7 +660,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         
                         weapon_cooldown_timer = current_time
                         
-                        # Logic Kaboom Buff
                         if player_buffs['kaboom'] > 0:
                             kaboom_throws += 1
                             required_throws = max(2, 6 - player_buffs['kaboom'])
@@ -638,7 +671,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     click_x, click_y = pygame.mouse.get_pos()
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3 and game_state == "PLAYING":
-                player_special.trigger(player.x, player.y)
+                player_special.trigger_random_skill()
 
         if not player.update_environment_logic(mode_name, WIDTH, HEIGHT):
             running = False
@@ -650,18 +683,16 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 player_poison_time_left -= 1
                 if player.health <= 0: running = False
 
-        # 2. UPDATES
         if game_state == "PLAYING":
             current_obstacles = [ent.rect for ent in active_endless_entities] if mode_name == 'ENDLESS' else all_obstacles
             player.handle_movement(pygame.key.get_pressed(), current_obstacles, grasses, mode_name, WIDTH, HEIGHT)
 
-            # CẬP NHẬT SỐ LƯỢNG VŨ KHÍ TỪ X2 BUFF
             target_weapon_count = 1 + player_buffs['x2']
             if len(player_weapons) < target_weapon_count:
                 while len(player_weapons) < target_weapon_count:
                     player_weapons.append(weapon.WeaponEntity(get_weapon_image()))
                 for i, pw in enumerate(player_weapons):
-                    pw.angle = i * (360 / target_weapon_count) # Phân bố đều góc quay quanh người
+                    pw.angle = i * (360 / target_weapon_count)
 
             if player_buffs['health'] > 0 and current_time % max(100, 1000 - player_buffs['health']*200) < 20:
                 player.health = min(player.max_health, player.health + 1)
@@ -699,18 +730,23 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
 
         draw_player_x, draw_player_y = (WIDTH // 2, HEIGHT // 2) if mode_name == 'ENDLESS' else (int(player.x), int(player.y))
         
+        # CẬP NHẬT QUÁI (Đã sửa triệt để tham số active_projectiles)
         for enemy in active_enemies: 
-            dmg_taken = enemy.update(player, dt, WIDTH, HEIGHT, mode_name, player_buffs['shield'])
+            dmg_taken = enemy.update(player, dt, WIDTH, HEIGHT, mode_name, player_buffs['shield'], enemy_projectiles)
             if dmg_taken > 0:
                 if shield_hp > 0: shield_hp -= dmg_taken
-                else: player.take_damage_and_knockback(dmg_taken, enemy.x, enemy.y, 10, WIDTH, HEIGHT, mode_name)
+                else: 
+                    player.take_damage_and_knockback(dmg_taken, enemy.x, enemy.y, 10, WIDTH, HEIGHT, mode_name)
+                    if player.health <= 0: running = False
 
         for proj in enemy_projectiles[:]:
             if not proj.update(): enemy_projectiles.remove(proj)
             elif math.hypot(player.x - proj.x, player.y - proj.y) < proj.radius + player.radius:
                 dmg = 1
                 if shield_hp > 0: shield_hp -= dmg
-                else: player.health -= dmg
+                else: 
+                    player.health -= dmg
+                    if player.health <= 0: running = False
                 player_poison_time_left = 3
                 player_last_poison_tick = current_time
                 if proj in enemy_projectiles: enemy_projectiles.remove(proj)
@@ -728,7 +764,9 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 dmg_taken = danger.update(player, WIDTH, HEIGHT, mode_name, player_buffs['shield'])
                 if dmg_taken > 0:
                     if shield_hp > 0: shield_hp -= dmg_taken
-                    else: player.take_damage_and_knockback(dmg_taken, danger.x, danger.y, 25, WIDTH, HEIGHT, mode_name)
+                    else: 
+                        player.take_damage_and_knockback(dmg_taken, danger.x, danger.y, 25, WIDTH, HEIGHT, mode_name)
+                        if player.health <= 0: running = False
                 if danger.state == "DONE": active_dangers.remove(danger)
                 
         elif mode_name == 'ENDLESS':
@@ -766,7 +804,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         else:
             weapon_colliders.extend(all_obstacles)
             
-        # LOGIC GÂY DAME VÀ SỰ KIỆN TỪ VŨ KHÍ
         damage_multiplier = 1.0 + (0.3 * player_buffs['dame'])
         
         for pw in player_weapons:
@@ -781,13 +818,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     pw.action_time = current_time
                     pw.rect.center = (-9999, -9999) 
                     pw.explosion = weapon.WeaponExplosion(pw.x, pw.y, weapon.SELECTED_WEAPON)
-                    
-                    if weapon.SELECTED_WEAPON in ['bomb', 'bomb1'] and random.random() < 0.20:
-                        player_special.particle_sys.spawn_bomb2_explosion(pw.x, pw.y)
-                        player_special.active_toxic_clouds.append(special.ToxicCloudEntity(pw.x, pw.y))
-                    
-                    if weapon.SELECTED_WEAPON == 'wrench' and len(player_special.active_tanks) < 2:
-                        player_special.active_tanks.append(special.TankEntity(pw.x, pw.y, player_special))
                         
                 elif pw.state == 'shooting' and pw.active_bullet:
                     bullet_rect = pygame.Rect(0, 0, 10, 10)
@@ -810,14 +840,16 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             if ex.update(player):
                 dmg = 20 * (0.95 ** player_buffs['shield']) 
                 if shield_hp > 0: shield_hp -= dmg
-                else: player.health -= dmg
+                else: 
+                    player.health -= dmg
+                    if player.health <= 0: running = False
             if ex.life <= 0: orange_explosions.remove(ex)
             
         for kex in kaboom_explosions[:]:
             kex.update(active_enemies)
             if kex.life <= 0: kaboom_explosions.remove(kex)
 
-        player_special.update(player.x, player.y, active_enemies)
+        player_special.update(active_enemies)
 
         # 3. DRAWING
         if game_assets.get(ground_key):
@@ -867,7 +899,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             pygame.draw.circle(poison_flash, (0, 255, 0, 100), (player.radius*1.25, player.radius*1.25), player.radius*1.25)
             screen.blit(poison_flash, (draw_player_x - player.radius*1.25, draw_player_y - player.radius*1.25))
 
-        # --- VẼ DANH SÁCH VŨ KHÍ ---
         for pw in player_weapons: pw.draw(screen, camera_x, camera_y)
         player_special.draw(screen, camera_x, camera_y)
         
@@ -879,7 +910,28 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         draw_health_bar(screen, 20, 20, player.health, player.max_health, game_assets['font_level_diff'], shield_hp, 50 * player_buffs['shield'])
         score.game_score.draw_in_game(screen, game_assets['font_level_diff'], 20, 60)
         
-        # --- UI CHỌN BUFF VÀ THÔNG BÁO MÀN ---
+        # --- HUD BUFF ĐÃ CHỌN NGAY DƯỚI ĐIỂM ---
+        buff_start_x = 20
+        buff_y = 90
+        for b_name, b_lvl in player_buffs.items():
+            if b_lvl > 0:
+                img = buff_images.get(b_name)
+                if img:
+                    small_img = pygame.transform.smoothscale(img, (32, 32))
+                    screen.blit(small_img, (buff_start_x, buff_y))
+                    
+                    # Vẽ Badge Level góc trên bên phải
+                    pygame.draw.circle(screen, BLACK, (buff_start_x + 32, buff_y), 9)
+                    pygame.draw.circle(screen, (255, 215, 0), (buff_start_x + 32, buff_y), 9, 1)
+                    
+                    # Căn chỉnh text Level vừa khít trong vòng tròn
+                    lvl_font = pygame.font.SysFont(None, 18, bold=True)
+                    text_obj = lvl_font.render(str(b_lvl), True, WHITE)
+                    screen.blit(text_obj, text_obj.get_rect(center=(buff_start_x + 32, buff_y)))
+                    
+                    buff_start_x += 42 # Đẩy tọa độ x sang phải cho buff kế tiếp
+
+        # --- UI CHỌN BUFF ---
         if game_state == "CHOOSING_BUFF":
             overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 180))
