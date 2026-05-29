@@ -171,6 +171,22 @@ class ParticleManager:
 # ==========================================
 # CÔNG CỤ VA CHẠM VÀ GÂY SÁT THƯƠNG
 # ==========================================
+def heal_player(player, amount):
+    """Hàm bổ sung hỗ trợ hồi máu an toàn cho player."""
+    try:
+        if hasattr(player, 'heal'):
+            player.heal(amount)
+        elif hasattr(player, 'health'):
+            player.health += amount
+            if hasattr(player, 'max_health'):
+                player.health = min(player.health, player.max_health)
+        elif hasattr(player, 'hp'):
+            player.hp += amount
+            if hasattr(player, 'max_hp'):
+                player.hp = min(player.hp, player.max_hp)
+    except Exception:
+        pass
+
 def check_collision_flexible(rect, projectile_x, projectile_y, enemy):
     if hasattr(enemy, 'rect') and isinstance(enemy.rect, pygame.Rect): 
         return rect.colliderect(enemy.rect)
@@ -398,6 +414,9 @@ class SubFlowerEntity:
                 if check_collision_flexible(self.rect, self.x, self.y, e):
                     deal_damage(e, 30) 
                     hit = True
+                    # CƠ CHẾ MỚI: Hồi 1 máu cho player khi ném trúng kẻ địch (Hoa nhỏ Flower1)
+                    if self.manager and self.manager.player:
+                        heal_player(self.manager.player, 1)
                     break
                     
             if hit or math.hypot(self.vx, self.vy) < 1.0:
@@ -466,6 +485,9 @@ class Flower2Entity:
                 if check_collision_flexible(self.rect, self.x, self.y, e):
                     deal_damage(e, 65) 
                     hit = True
+                    # CƠ CHẾ MỚI: Hồi 1 máu cho player khi ném trúng kẻ địch (Hoa lớn Flower2)
+                    if self.manager_ref and self.manager_ref.player:
+                        heal_player(self.manager_ref.player, 1)
                     break
                     
             if hit or math.hypot(self.vx, self.vy) < 1.0:
@@ -493,7 +515,10 @@ class SpecialSkill:
         self.active_flower2 = None
         self.sub_flowers = []
         
-        # Đã loại bỏ hoàn toàn các List gây lỗi vũ khí cũ (bom, wrench)
+        # Đăng ký player sang module weapon để đồng bộ cơ chế hồi máu và buff Kaboom diện rộng
+        import weapon
+        weapon.CURRENT_PLAYER = player
+        
         self.active_tanks = []
         self.active_rockets = []
         self.active_toxic_clouds = []
@@ -501,30 +526,30 @@ class SpecialSkill:
         self.particle_sys = ParticleManager() 
 
     def on_player_throw_weapon(self, weapon_name, target_x, target_y, start_x, start_y):
-        # Nếu đang có Hoa Đặc Biệt quay quanh người thì ném nó trước
         if self.active_flower2 and self.active_flower2.state == 'orbit':
             self.active_flower2.throw(target_x, target_y, start_x, start_y, self)
             return True 
             
-        # Bộ đếm xuất hiện Hoa Đặc Biệt
         if weapon_name == 'flower':
             self.flower_throw_count += 1
             if self.flower_throw_count >= 3 and not self.active_flower2:
                 self.flower_throw_count = 0
                 self.active_flower2 = Flower2Entity() 
                 
-        # Trả về False để Hệ thống Nhiều Vũ khí (Player_Weapons trong gameplay.py) xử lý việc ném tiêu chuẩn
         return False
 
     def trigger_random_skill(self):
-        # Hàm kích hoạt ngẫu nhiên (chuột phải)
         pass
 
     def trigger(self, player_x, player_y):
         pass
 
     def update(self, *args):
-        # Xử lý thông minh tham số truyền vào từ gameplay.py
+        # Luôn cập nhật và bảo đảm reference người chơi mới nhất cho weapon module
+        import weapon
+        if self.player:
+            weapon.CURRENT_PLAYER = self.player
+
         if len(args) == 1:
             entities = args[0]
             px = self.player.x if self.player else 0
@@ -535,52 +560,42 @@ class SpecialSkill:
             entities = []
             px, py = 0, 0
 
-        # Cập nhật Hoa Đặc Biệt (Flower2)
         if self.active_flower2:
             if not self.active_flower2.update(px, py, entities):
                 self.active_flower2 = None 
                 
-        # Cập nhật hoa con bắn ra sau khi nổ
         for sub in self.sub_flowers[:]:
             if not sub.update(entities): 
                 self.sub_flowers.remove(sub)
 
-        # Cập nhật xe tăng 
         for tank in self.active_tanks[:]:
             if not tank.update(entities): 
                 self.active_tanks.remove(tank)
                 
-        # Cập nhật tên lửa của xe tăng
         for rocket in self.active_rockets[:]:
             if not rocket.update(entities): 
                 self.active_rockets.remove(rocket)
             
-        # Cập nhật mây độc sinh ra từ bom
         for tc in self.active_toxic_clouds[:]:
             if not tc.update(entities): 
                 self.active_toxic_clouds.remove(tc)
             
-        # Cập nhật tất cả các hạt hiệu ứng (Particle)
         self.particle_sys.update()
 
     def draw(self, surface, camera_x=0, camera_y=0):
-        # Vẽ các đám mây độc dưới đất
         for tc in self.active_toxic_clouds: 
             tc.draw(surface, camera_x, camera_y)
         
-        # Vẽ hoa skill chính và phụ
         if self.active_flower2: 
             self.active_flower2.draw(surface, camera_x, camera_y)
         for sub in self.sub_flowers: 
             sub.draw(surface, camera_x, camera_y)
         
-        # Vẽ xe tăng và tên lửa
         for tank in self.active_tanks: 
             tank.draw(surface, camera_x, camera_y)
         for rocket in self.active_rockets: 
             rocket.draw(surface, camera_x, camera_y)
             
-        # Vẽ hệ thống hạt
         self.particle_sys.draw(surface, camera_x, camera_y)
 
 

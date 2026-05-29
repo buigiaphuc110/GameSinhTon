@@ -134,15 +134,18 @@ class EndlessEntity:
 # QUÁI VẬT & HIỆU ỨNG TỪ QUÁI
 # ==========================================
 class EnemyNor:
-    def __init__(self, x, y, frames):
+    def __init__(self, x, y, frames, wave=1):
         self.x, self.y = float(x), float(y)
         self.type = 'normal'
         self.frames = [pygame.transform.scale(f, (int(f.get_width() / 1.65), int(f.get_height() / 1.4))) for f in frames]
         self.frame_index, self.frame_rate, self.last_frame_time = 0, 100, pygame.time.get_ticks()
-        self.speed, self.radius = 35, 20 
+        
+        stat_mult = 1.0 + max(0, (wave - 3) // 2) * 0.20 if wave >= 5 else 1.0
+        
+        self.speed, self.radius = 35 * stat_mult, 20 
         self.damage_cooldown, self.last_damage_time = 1000, 0
-        self.angle, self.max_health = 0, 100  
-        self.health, self.base_damage = self.max_health, 5
+        self.angle, self.max_health = 0, int(100 * stat_mult)
+        self.health, self.base_damage = self.max_health, int(5 * stat_mult)
         self.score_value = 10
         self.rect = pygame.Rect(0, 0, self.frames[0].get_width(), self.frames[0].get_height()) if self.frames else pygame.Rect(0, 0, 32, 32)
 
@@ -183,13 +186,15 @@ class EnemyNor:
             pygame.draw.rect(screen, (60, 230, 60), (bx, by, max(0, int(20 * (self.health / self.max_health))), 3))
 
 class EnemyNorBig(EnemyNor):
-    def __init__(self, x, y, frames):
-        super().__init__(x, y, frames)
+    def __init__(self, x, y, frames, wave=1):
+        super().__init__(x, y, frames, wave)
         self.type = 'big'
         self.frames = [pygame.transform.scale(f, (f.get_width() * 2, f.get_height() * 2)) for f in self.frames]
-        self.speed, self.radius = 45, 60 / 1.4 
-        self.max_health = 300
-        self.health, self.base_damage = self.max_health, 15
+        
+        stat_mult = 1.0 + max(0, (wave - 3) // 2) * 0.20 if wave >= 5 else 1.0
+        self.speed, self.radius = 45 * stat_mult, 60 / 1.4 
+        self.max_health = int(300 * stat_mult)
+        self.health, self.base_damage = self.max_health, int(15 * stat_mult)
         self.score_value = 30
         self.rect = pygame.Rect(0, 0, self.frames[0].get_size()[0], self.frames[0].get_size()[1]) if self.frames else pygame.Rect(0, 0, 64, 64)
 
@@ -222,10 +227,13 @@ class PoisonBullet:
         pygame.draw.circle(screen, (200, 255, 200), (int(self.x - camera_x), int(self.y - camera_y)), self.radius // 2)
 
 class EnemyNorGreen(EnemyNor):
-    def __init__(self, x, y, frames):
-        super().__init__(x, y, frames)
+    def __init__(self, x, y, frames, wave=1):
+        super().__init__(x, y, frames, wave)
         self.type = 'green'
-        self.speed, self.max_health = 25, 80
+        self.wave = wave 
+        
+        stat_mult = 1.0 + max(0, (wave - 3) // 2) * 0.20 if wave >= 5 else 1.0
+        self.speed, self.max_health = 25 * stat_mult, int(80 * stat_mult)
         self.health, self.score_value = self.max_health, 20
         self.fire_rate, self.last_shot_time = 2000, pygame.time.get_ticks()
         
@@ -258,6 +266,14 @@ class EnemyNorGreen(EnemyNor):
 
         if dist < 400 and current_time - self.last_shot_time > self.fire_rate:
             active_projectiles.append(PoisonBullet(self.x, self.y, player.x, player.y))
+            
+            if self.wave >= 5:
+                angle_rad = math.atan2(player.y - self.y, player.x - self.x)
+                spread_angle = 0.25 
+                target_x2 = self.x + math.cos(angle_rad + spread_angle) * dist
+                target_y2 = self.y + math.sin(angle_rad + spread_angle) * dist
+                active_projectiles.append(PoisonBullet(self.x, self.y, target_x2, target_y2))
+                
             self.last_shot_time = current_time
             
         if dist < self.radius + player.radius:
@@ -267,10 +283,12 @@ class EnemyNorGreen(EnemyNor):
         return 0
 
 class EnemyNorOrange(EnemyNor):
-    def __init__(self, x, y, frames):
-        super().__init__(x, y, frames)
+    def __init__(self, x, y, frames, wave=1):
+        super().__init__(x, y, frames, wave)
         self.type = 'orange'
-        self.speed, self.max_health = 45, 60
+        
+        stat_mult = 1.0 + max(0, (wave - 3) // 2) * 0.20 if wave >= 5 else 1.0
+        self.speed, self.max_health = 45 * stat_mult, int(60 * stat_mult)
         self.health, self.score_value = self.max_health, 15
         
         colored_frames = []
@@ -284,10 +302,10 @@ class EnemyNorOrange(EnemyNor):
 
 # ----------------- SMOOTH EXPLOSIONS -----------------
 class OrangeExplosion:
-    def __init__(self, x, y):
+    def __init__(self, x, y, wave=1):
         self.x, self.y = x, y
         self.radius = 5
-        self.max_radius = 80
+        self.max_radius = 130 if wave >= 5 else 80
         self.life = 255
         self.has_dealt_damage = False
 
@@ -311,9 +329,14 @@ class KaboomExplosion:
     def __init__(self, x, y, level):
         self.x, self.y = x, y
         self.radius = 5
-        self.max_radius = 100 + (level * 30)
+        # Cập nhật bán kính dựa trên cấp độ: Level 3 là toàn Map
+        if level >= 3:
+            self.max_radius = 999999
+        else:
+            self.max_radius = 160 if level == 1 else 300
+            
         self.life = 255
-        self.level, self.damage = level, 30 * level
+        self.level, self.damage = level, 75 * level
         self.has_dealt_damage = False
 
     def update(self, enemies):
@@ -322,20 +345,27 @@ class KaboomExplosion:
         if self.radius >= self.max_radius * 0.6 and not self.has_dealt_damage:
             self.has_dealt_damage = True
             for e in enemies:
+                # Nếu max_radius = 999999 thì mặc định trúng toàn bộ map
                 dist = math.hypot(e.x - self.x, e.y - self.y)
-                if dist < self.max_radius:
+                if self.max_radius >= 999999 or dist < self.max_radius:
                     e.take_damage(self.damage)
-                    if dist > 0:
+                    if dist > 0 and self.max_radius < 999999: # Chỉ đẩy lùi nếu không phải level max map
                         e.x += ((e.x - self.x) / dist) * 40
                         e.y += ((e.y - self.y) / dist) * 40
 
     def draw(self, screen, camera_x, camera_y):
         if self.life > 0:
-            surf = pygame.Surface((self.max_radius*2, self.max_radius*2), pygame.SRCALPHA)
-            pygame.draw.circle(surf, (200, 50, 50, max(0, int(self.life*0.5))), (self.max_radius, self.max_radius), int(self.radius))
-            pygame.draw.circle(surf, (255, 200, 50, max(0, self.life)), (self.max_radius, self.max_radius), int(self.radius*0.7))
-            pygame.draw.circle(surf, (255, 255, 200, max(0, self.life)), (self.max_radius, self.max_radius), int(self.radius), 3)
-            screen.blit(surf, (int(self.x - camera_x - self.max_radius), int(self.y - camera_y - self.max_radius)))
+            if self.max_radius >= 999999:
+                # Hiệu ứng nổ rực sáng toàn màn hình
+                overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+                overlay.fill((255, 200, 50, max(0, int(self.life * 0.4))))
+                screen.blit(overlay, (0, 0))
+            else:
+                surf = pygame.Surface((self.max_radius*2, self.max_radius*2), pygame.SRCALPHA)
+                pygame.draw.circle(surf, (200, 50, 50, max(0, int(self.life*0.5))), (self.max_radius, self.max_radius), int(self.radius))
+                pygame.draw.circle(surf, (255, 200, 50, max(0, self.life)), (self.max_radius, self.max_radius), int(self.radius*0.7))
+                pygame.draw.circle(surf, (255, 255, 200, max(0, self.life)), (self.max_radius, self.max_radius), int(self.radius), 3)
+                screen.blit(surf, (int(self.x - camera_x - self.max_radius), int(self.y - camera_y - self.max_radius)))
 
 # ==========================================
 # CÁC KỸ NĂNG TỪ BUFF
@@ -421,13 +451,11 @@ def draw_buff_card(screen, font, title, desc, rect, is_hover, level, buff_images
             line, y_offset = w + " ", y_offset + 25
     draw_text_with_shadow(line, font, (220, 230, 255), screen, card_rect.centerx, card_rect.y + y_offset)
 
-# HÀM LOAD ẢNH BUFF THÔNG MINH CHỐNG LỖI HIỂN THỊ COIN
 def load_buff_images():
     images = {}
     colors = [(255,100,100), (100,255,100), (100,100,255), (255,200,50), (255,100,255), (100,255,255), (200,200,200), (150,150,150)]
     for i, b in enumerate(BUFF_TYPES):
         loaded = False
-        # Thử mọi định dạng và kiểu viết hoa/thường để tránh lỗi file
         for ext in ['.png', '.PNG', '.jpg', '.JPG']:
             for name_variant in [b, b.capitalize(), b.upper()]:
                 path = os.path.join('buff', f'{name_variant}{ext}')
@@ -439,7 +467,6 @@ def load_buff_images():
                     except: pass
             if loaded: break
             
-        # NẾU THIẾU ẢNH: Tạo biểu tượng chữ cái bù đắp đẹp mắt
         if not loaded: 
             dummy = pygame.Surface((60, 60), pygame.SRCALPHA)
             pygame.draw.circle(dummy, colors[i%len(colors)], (30,30), 25)
@@ -585,6 +612,9 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
     all_obstacles = dirts + rocks + trees
     player = Player(WIDTH // 2, HEIGHT // 2)
     
+    # Kế thừa level cho các logic buff cao cấp trong class WeaponEntity
+    player.kaboom_level = 0
+    
     def get_weapon_image():
         path = f"weapon/{weapon.SELECTED_WEAPON}.png"
         if os.path.exists(path):
@@ -597,7 +627,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         return w_img
 
     player_weapons = [weapon.WeaponEntity(get_weapon_image())]
-    player_special = special.SpecialSkillManager(player) # Fix lỗi không truyền player vào SpecialSkill
+    player_special = special.SpecialSkill(player) 
     score.game_score.reset_score()
     
     active_dangers, active_lavas, active_endless_entities = [], [], []
@@ -694,7 +724,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 for i, pw in enumerate(player_weapons):
                     pw.angle = i * (360 / target_weapon_count)
 
-            if player_buffs['health'] > 0 and current_time % max(100, 1000 - player_buffs['health']*200) < 20:
+            if player_buffs['health'] > 0 and current_time % max(1500, 4500 - player_buffs['health'] * 1000) < 20:
                 player.health = min(player.max_health, player.health + 1)
 
             if len(enemies_to_spawn) > 0:
@@ -708,10 +738,10 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     else:                  sx, sy = cx + WIDTH + 60, random.randint(cy - 50, cy + HEIGHT + 50)
                     
                     e_type = enemies_to_spawn.pop()
-                    if e_type == 'big': active_enemies.append(EnemyNorBig(sx, sy, game_assets['nor_frames']))
-                    elif e_type == 'green': active_enemies.append(EnemyNorGreen(sx, sy, game_assets['nor_frames']))
-                    elif e_type == 'orange': active_enemies.append(EnemyNorOrange(sx, sy, game_assets['nor_frames']))
-                    else: active_enemies.append(EnemyNor(sx, sy, game_assets['nor_frames']))
+                    if e_type == 'big': active_enemies.append(EnemyNorBig(sx, sy, game_assets['nor_frames'], wave=current_wave))
+                    elif e_type == 'green': active_enemies.append(EnemyNorGreen(sx, sy, game_assets['nor_frames'], wave=current_wave))
+                    elif e_type == 'orange': active_enemies.append(EnemyNorOrange(sx, sy, game_assets['nor_frames'], wave=current_wave))
+                    else: active_enemies.append(EnemyNor(sx, sy, game_assets['nor_frames'], wave=current_wave))
                     
                     enemy_spawn_timer = max(0.2, 1.0 - (current_wave * 0.05))
             
@@ -730,7 +760,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
 
         draw_player_x, draw_player_y = (WIDTH // 2, HEIGHT // 2) if mode_name == 'ENDLESS' else (int(player.x), int(player.y))
         
-        # CẬP NHẬT QUÁI (Đã sửa triệt để tham số active_projectiles)
         for enemy in active_enemies: 
             dmg_taken = enemy.update(player, dt, WIDTH, HEIGHT, mode_name, player_buffs['shield'], enemy_projectiles)
             if dmg_taken > 0:
@@ -752,22 +781,25 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 if proj in enemy_projectiles: enemy_projectiles.remove(proj)
 
         if mode_name == 'MEDIUM':
-            danger_spawn_timer -= dt
-            if danger_spawn_timer <= 0:
-                roll = random.random()
-                spawn_count = 5 if roll < 0.05 else (2 if roll < 0.45 else 1)
-                for _ in range(spawn_count):
-                    active_dangers.append(DangerExplosion(random.randint(50, WIDTH - 50), random.randint(50, HEIGHT - 50), game_assets['alarm'], game_assets['explosion_frames']))
-                danger_spawn_timer = 3.0 
-            
-            for danger in active_dangers[:]:
-                dmg_taken = danger.update(player, WIDTH, HEIGHT, mode_name, player_buffs['shield'])
-                if dmg_taken > 0:
-                    if shield_hp > 0: shield_hp -= dmg_taken
-                    else: 
-                        player.take_damage_and_knockback(dmg_taken, danger.x, danger.y, 25, WIDTH, HEIGHT, mode_name)
-                        if player.health <= 0: running = False
-                if danger.state == "DONE": active_dangers.remove(danger)
+            if game_state == "PLAYING":
+                danger_spawn_timer -= dt
+                if danger_spawn_timer <= 0:
+                    roll = random.random()
+                    spawn_count = 5 if roll < 0.05 else (2 if roll < 0.45 else 1)
+                    for _ in range(spawn_count):
+                        active_dangers.append(DangerExplosion(random.randint(50, WIDTH - 50), random.randint(50, HEIGHT - 50), game_assets['alarm'], game_assets['explosion_frames']))
+                    danger_spawn_timer = 3.0 
+                
+                for danger in active_dangers[:]:
+                    dmg_taken = danger.update(player, WIDTH, HEIGHT, mode_name, player_buffs['shield'])
+                    if dmg_taken > 0:
+                        if shield_hp > 0: shield_hp -= dmg_taken
+                        else: 
+                            player.take_damage_and_knockback(dmg_taken, danger.x, danger.y, 25, WIDTH, HEIGHT, mode_name)
+                            if player.health <= 0: running = False
+                    if danger.state == "DONE": active_dangers.remove(danger)
+            else:
+                active_dangers.clear() 
                 
         elif mode_name == 'ENDLESS':
             player_in_lava = False
@@ -807,18 +839,83 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         damage_multiplier = 1.0 + (0.3 * player_buffs['dame'])
         
         for pw in player_weapons:
+            if not hasattr(pw, 'hit_targets'):
+                pw.hit_targets = set()
+                
+            was_thrown = (pw.state == 'thrown')
             pw.update(player.x, player.y, weapon_colliders)
             
+            if pw.state != 'thrown':
+                pw.hit_targets.clear()
+            
+            # --- XỬ LÝ NẾU NÉM TRƯỢT ---
+            if was_thrown and pw.state != 'thrown' and weapon.SELECTED_WEAPON != 'sword':
+                pw.explosion = weapon.WeaponExplosion(pw.x, pw.y, weapon.SELECTED_WEAPON)
+                
+                if weapon.SELECTED_WEAPON == 'axe':
+                    for other_enemy in active_enemies:
+                        if math.hypot(other_enemy.x - pw.x, other_enemy.y - pw.y) < 180:
+                            other_enemy.take_damage(35 * damage_multiplier)
+                            
+                elif weapon.SELECTED_WEAPON in ['bomb', 'bomb1', 'bomb2']:
+                    for other_enemy in active_enemies:
+                        # TĂNG AOE BOM X1.5 LẦN
+                        if math.hypot(other_enemy.x - pw.x, other_enemy.y - pw.y) < 150: 
+                            # TĂNG DAME AOE BOM X2.5 LẦN
+                            other_enemy.take_damage(87 * damage_multiplier) 
+                    
+                    if getattr(pw, 'is_toxic', False): 
+                        player_special.particle_sys.spawn_bomb2_explosion(pw.x, pw.y)
+                        player_special.active_toxic_clouds.append(special.ToxicCloudEntity(pw.x, pw.y))
+                        
+                elif weapon.SELECTED_WEAPON == 'wrench':
+                    max_tanks = 3 if player_buffs['speed'] >= 3 else 2
+                    if len(player_special.active_tanks) < max_tanks:
+                        player_special.active_tanks.append(special.TankEntity(pw.x, pw.y, player_special))
+
+            # --- XỬ LÝ NẾU VŨ KHÍ TRÚNG QUÁI TRỰC TIẾP ---
             for enemy in active_enemies[:]:
                 is_dead = False
                 
-                if pw.state == 'thrown' and pw.rect.colliderect(enemy.rect):
-                    is_dead = enemy.take_damage(40 * damage_multiplier) 
-                    pw.state = 'disappeared'
-                    pw.action_time = current_time
-                    pw.rect.center = (-9999, -9999) 
-                    pw.explosion = weapon.WeaponExplosion(pw.x, pw.y, weapon.SELECTED_WEAPON)
+                if pw.state == 'thrown' and pw.rect.colliderect(enemy.rect) and enemy not in pw.hit_targets:
+                    base_dmg = 40
+                    if weapon.SELECTED_WEAPON == 'sword':
+                        base_dmg = 75
+                    elif weapon.SELECTED_WEAPON in ['bomb', 'bomb1', 'bomb2']:
+                        base_dmg = 100 # TĂNG DAME TRỰC TIẾP BOM X2.5 LẦN
                         
+                    is_dead = enemy.take_damage(base_dmg * damage_multiplier) 
+                    
+                    pw.hit_targets.add(enemy) 
+                    
+                    if weapon.SELECTED_WEAPON != 'sword':
+                        pw.state = 'disappeared'
+                        pw.action_time = current_time
+                        pw.rect.center = (-9999, -9999) 
+                        pw.explosion = weapon.WeaponExplosion(pw.x, pw.y, weapon.SELECTED_WEAPON)
+                        
+                        if weapon.SELECTED_WEAPON == 'axe':
+                            for other_enemy in active_enemies:
+                                if other_enemy != enemy and math.hypot(other_enemy.x - pw.x, other_enemy.y - pw.y) < 180:
+                                    other_enemy.take_damage(35 * damage_multiplier)
+                                    
+                        elif weapon.SELECTED_WEAPON in ['bomb', 'bomb1', 'bomb2']:
+                            for other_enemy in active_enemies:
+                                # TĂNG AOE BOM X1.5 LẦN
+                                if other_enemy != enemy and math.hypot(other_enemy.x - pw.x, other_enemy.y - pw.y) < 150:
+                                    # TĂNG DAME AOE BOM X2.5 LẦN
+                                    other_enemy.take_damage(87 * damage_multiplier)
+                        
+                        if weapon.SELECTED_WEAPON == 'wrench':
+                            max_tanks = 3 if player_buffs['speed'] >= 3 else 2
+                            if len(player_special.active_tanks) < max_tanks:
+                                player_special.active_tanks.append(special.TankEntity(pw.x, pw.y, player_special))
+                                
+                        if weapon.SELECTED_WEAPON in ['bomb', 'bomb1', 'bomb2']:
+                            if getattr(pw, 'is_toxic', False): 
+                                player_special.particle_sys.spawn_bomb2_explosion(pw.x, pw.y)
+                                player_special.active_toxic_clouds.append(special.ToxicCloudEntity(pw.x, pw.y))
+                            
                 elif pw.state == 'shooting' and pw.active_bullet:
                     bullet_rect = pygame.Rect(0, 0, 10, 10)
                     bullet_rect.center = (int(pw.active_bullet['x']), int(pw.active_bullet['y']))
@@ -830,7 +927,13 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         
                 if is_dead or enemy.health <= 0:
                     if enemy.type == 'orange':
-                        orange_explosions.append(OrangeExplosion(enemy.x, enemy.y))
+                        orange_explosions.append(OrangeExplosion(enemy.x, enemy.y, current_wave))
+                    elif enemy.type == 'big' and current_wave >= 5:
+                        for _ in range(2):
+                            rx = enemy.x + random.randint(-25, 25)
+                            ry = enemy.y + random.randint(-25, 25)
+                            active_enemies.append(EnemyNor(rx, ry, game_assets['nor_frames'], wave=current_wave))
+                            
                     if enemy in active_enemies: 
                         active_enemies.remove(enemy)
                     score_mult = 1.0 + (0.5 * player_buffs['coin'])
@@ -871,9 +974,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 shadow_key = f'{key}_shadow'
                 if game_assets.get(shadow_key):
                     sh_img = game_assets[shadow_key]
-                    sh_rect = sh_img.get_rect(center=(obs.centerx, obs.bottom - 2))
-                    screen.blit(sh_img, sh_rect)
-                
+                    screen.blit(sh_img, sh_img.get_rect(center=(obs.centerx, obs.bottom - 2)))
             for obs, key in zip(all_rects, all_keys):
                 screen.blit(game_assets[key], obs.topleft)
                 
@@ -910,7 +1011,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         draw_health_bar(screen, 20, 20, player.health, player.max_health, game_assets['font_level_diff'], shield_hp, 50 * player_buffs['shield'])
         score.game_score.draw_in_game(screen, game_assets['font_level_diff'], 20, 60)
         
-        # --- HUD BUFF ĐÃ CHỌN NGAY DƯỚI ĐIỂM ---
+        # --- HUD BUFF ĐÃ CHỌN ---
         buff_start_x = 20
         buff_y = 90
         for b_name, b_lvl in player_buffs.items():
@@ -920,16 +1021,14 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     small_img = pygame.transform.smoothscale(img, (32, 32))
                     screen.blit(small_img, (buff_start_x, buff_y))
                     
-                    # Vẽ Badge Level góc trên bên phải
                     pygame.draw.circle(screen, BLACK, (buff_start_x + 32, buff_y), 9)
                     pygame.draw.circle(screen, (255, 215, 0), (buff_start_x + 32, buff_y), 9, 1)
                     
-                    # Căn chỉnh text Level vừa khít trong vòng tròn
                     lvl_font = pygame.font.SysFont(None, 18, bold=True)
                     text_obj = lvl_font.render(str(b_lvl), True, WHITE)
                     screen.blit(text_obj, text_obj.get_rect(center=(buff_start_x + 32, buff_y)))
                     
-                    buff_start_x += 42 # Đẩy tọa độ x sang phải cho buff kế tiếp
+                    buff_start_x += 42 
 
         # --- UI CHỌN BUFF ---
         if game_state == "CHOOSING_BUFF":
@@ -951,9 +1050,14 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     
                     if buff_name == 'health': 
                         player.max_health = base_max_health + (50 * player_buffs['health'])
-                        player.health = player.max_health
-                    elif buff_name == 'speed': player.speed = 250 + (30 * player_buffs['speed'])
-                    elif buff_name == 'shield': shield_hp = 50 * player_buffs['shield']
+                        player.health += 50 
+                    elif buff_name == 'speed': 
+                        player.speed = 250 + (30 * player_buffs['speed'])
+                    elif buff_name == 'kaboom':
+                        player.kaboom_level = player_buffs['kaboom']
+                    
+                    max_shield = 50 * player_buffs['shield']
+                    shield_hp = min(max_shield, shield_hp + max_shield // 2)
                     
                     game_state = "WAVE_TRANSITION"
                     transition_timer = current_time

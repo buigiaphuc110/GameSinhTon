@@ -13,6 +13,9 @@ FLOWER_EXPLOSION_CACHE = []
 # Biến toàn cục lưu cache hình ảnh các vũ khí để thực thể tự động đồng bộ hình ảnh
 WEAPON_IMAGES_CACHE = {}
 
+# Biến toàn cục lưu thực thể người chơi để xử lý hồi máu và buff nâng cao
+CURRENT_PLAYER = None
+
 def get_flower_explosion_frames():
     global FLOWER_EXPLOSION_CACHE
     if not FLOWER_EXPLOSION_CACHE:
@@ -146,18 +149,43 @@ class WeaponExplosion:
                 })
                 
         else:
-            self.lifetime = 20  
-            num_particles = random.randint(12, 18)
-            for _ in range(num_particles):
-                angle = random.uniform(0, 2 * math.pi)
-                dist = random.uniform(2, 15)
-                self.particles.append({
-                    'dx': math.cos(angle) * dist,
-                    'dy': math.sin(angle) * dist,
-                    'color_phase': random.uniform(0, 1),
-                    'speed': random.uniform(1.0, 2.0),
-                    'current_radius': random.randint(8, 20)
-                })
+            # Xử lý hiệu ứng nổ cho Bomb / Buff Kaboom nâng cấp
+            cp = globals().get('CURRENT_PLAYER')
+            k_lvl = 0
+            if cp:
+                if hasattr(cp, 'kaboom_level'): k_lvl = cp.kaboom_level
+                elif hasattr(cp, 'kaboom'): k_lvl = cp.kaboom
+            
+            if self.weapon_name in ['bomb', 'bomb1', 'bomb2'] and k_lvl == 0:
+                k_lvl = 1  
+                
+            if k_lvl > 0:
+                self.lifetime = 25 + k_lvl * 5
+                num_particles = random.randint(25, 40) if k_lvl < 3 else random.randint(90, 130)
+                for _ in range(num_particles):
+                    angle = random.uniform(0, 2 * math.pi)
+                    max_dist = 25 * k_lvl if k_lvl < 3 else 700
+                    dist = random.uniform(2, max_dist)
+                    self.particles.append({
+                        'dx': math.cos(angle) * dist,
+                        'dy': math.sin(angle) * dist,
+                        'color_phase': random.uniform(0, 0.7),
+                        'speed': random.uniform(1.02, 1.06) if k_lvl < 3 else random.uniform(1.04, 1.14),
+                        'current_radius': random.randint(12, 28) * (1 + k_lvl * 0.25)
+                    })
+            else:
+                self.lifetime = 20  
+                num_particles = random.randint(12, 18)
+                for _ in range(num_particles):
+                    angle = random.uniform(0, 2 * math.pi)
+                    dist = random.uniform(5, 25)
+                    self.particles.append({
+                        'dx': math.cos(angle) * dist,
+                        'dy': math.sin(angle) * dist,
+                        'color_phase': random.uniform(0, 1),
+                        'speed': random.uniform(1.0, 2.0),
+                        'current_radius': random.randint(12, 25)
+                    })
 
     def update(self):
         self.timer += 1
@@ -344,11 +372,20 @@ class WeaponEntity:
         self.active_bullet = None
         
         self.last_orbit_hit_time = 0 
+        self.is_toxic = False  # Đánh dấu có phải bom độc hay không
         
     def throw(self, target_x, target_y, start_x, start_y):
         if self.state == 'orbit':
             self.thrown_weapon_type = SELECTED_WEAPON
             self.x, self.y = start_x, start_y
+            
+            # --- CƠ CHẾ BOMB ĐỘC MỚI ---
+            if self.thrown_weapon_type in ['bomb', 'bomb1', 'bomb2']:
+                self.is_toxic = random.random() < 0.25 # 25% biến thành bom độc lúc ném
+                if self.is_toxic and 'toxic_bomb' in WEAPON_IMAGES_CACHE:
+                    self.original_image = WEAPON_IMAGES_CACHE['toxic_bomb']
+            else:
+                self.is_toxic = False
             
             dx = target_x - start_x
             dy = target_y - start_y
@@ -379,8 +416,7 @@ class WeaponEntity:
                     
                 else: 
                     self.state = 'thrown'
-                    # FIX TỐC ĐỘ BOMB: Cho Bomb bay chậm hơn bình thường
-                    speed = 12 if self.thrown_weapon_type == 'bomb' else 22  
+                    speed = 12 if self.thrown_weapon_type in ['bomb', 'bomb1', 'bomb2'] else 22  
                     self.friction = 0.94
                     self.vx = (dx / dist) * speed
                     self.vy = (dy / dist) * speed
@@ -395,7 +431,6 @@ class WeaponEntity:
             self.explosion = None
 
     def _deal_damage_to_entity(self, entity, amount):
-        """Hàm an toàn để gọi trừ máu quái mà không sợ game bị crash."""
         try:
             if hasattr(entity, 'take_damage'):
                 entity.take_damage(amount)
@@ -404,7 +439,7 @@ class WeaponEntity:
             elif hasattr(entity, 'health'):
                 entity.health -= amount
         except Exception:
-            pass # Bỏ qua lỗi nếu class quái có cấu trúc bất thường để game không bị đơ
+            pass 
 
     def update(self, player_x, player_y, entities):
         global WEAPON_IMAGES_CACHE
@@ -415,6 +450,8 @@ class WeaponEntity:
                 self.explosion = None
         
         if self.state == 'orbit':
+            # Reset cờ toxic và lấy lại hình ảnh ban đầu nếu đang ở quỹ đạo
+            self.is_toxic = False 
             if WEAPON_IMAGES_CACHE and SELECTED_WEAPON in WEAPON_IMAGES_CACHE:
                 if self.original_image != WEAPON_IMAGES_CACHE[SELECTED_WEAPON]:
                     self.original_image = WEAPON_IMAGES_CACHE[SELECTED_WEAPON]
@@ -430,7 +467,6 @@ class WeaponEntity:
             self.rect.center = (int(self.x), int(self.y))
             self.trail.clear()
 
-            # --- KIỂM TRA VA CHẠM KHI QUAY (ORBIT) ---
             if current_time - self.last_orbit_hit_time > 400: 
                 hit_anything = False
                 for entity in entities:
@@ -461,17 +497,62 @@ class WeaponEntity:
             for entity in entities:
                 entity_rect = entity.rect if hasattr(entity, 'rect') else entity
                 if isinstance(entity_rect, pygame.Rect) and self.rect.colliderect(entity_rect):
-                    # --- XỬ LÝ VA CHẠM KHI NÉM MỘT CÁCH AN TOÀN ---
                     self._deal_damage_to_entity(entity, 25)
                     hit_entity = True
-                    break # Chỉ cần trúng 1 con là dừng vòng lặp, tránh kẹt
+                    
+                    if self.thrown_weapon_type == 'flower':
+                        cp = globals().get('CURRENT_PLAYER')
+                        if cp:
+                            try:
+                                if hasattr(cp, 'heal'):
+                                    cp.heal(1)
+                                elif hasattr(cp, 'health'):
+                                    cp.health += 1
+                                    if hasattr(cp, 'max_health'):
+                                        cp.health = min(cp.health, cp.max_health)
+                                elif hasattr(cp, 'hp'):
+                                    cp.hp += 1
+                                    if hasattr(cp, 'max_hp'):
+                                        cp.hp = min(cp.hp, cp.max_hp)
+                            except Exception:
+                                pass
+                    break 
                     
             if hit_entity or math.hypot(self.vx, self.vy) < 0.5:
-                # Ngay lập tức ẩn vũ khí đi tránh kẹt khung hình
                 self.state = 'disappeared'
                 self.action_time = current_time 
                 self.rect.center = (-9999, -9999) 
                 self.explosion = WeaponExplosion(self.x, self.y, self.thrown_weapon_type)
+                
+                if self.thrown_weapon_type in ['bomb', 'bomb1', 'bomb2'] or self.thrown_weapon_type == 'kaboom':
+                    cp = globals().get('CURRENT_PLAYER')
+                    k_lvl = 1  
+                    if cp:
+                        if hasattr(cp, 'kaboom_level'): k_lvl = cp.kaboom_level
+                        elif hasattr(cp, 'kaboom'): k_lvl = cp.kaboom
+                    
+                    if k_lvl == 1:
+                        explosion_damage = 75
+                        explosion_radius = 160
+                    elif k_lvl == 2:
+                        explosion_damage = 150
+                        explosion_radius = 300
+                    else:  
+                        explosion_damage = 450
+                        explosion_radius = 999999  
+                        
+                    for entity in entities:
+                        if explosion_radius >= 999999:
+                            self._deal_damage_to_entity(entity, explosion_damage)
+                        else:
+                            ex = getattr(entity, 'x', None)
+                            ey = getattr(entity, 'y', None)
+                            if ex is None or ey is None:
+                                if hasattr(entity, 'rect') and isinstance(entity.rect, pygame.Rect):
+                                    ex, ey = entity.rect.centerx, entity.rect.centery
+                            if ex is not None and ey is not None:
+                                if math.hypot(ex - self.x, ey - self.y) <= explosion_radius:
+                                    self._deal_damage_to_entity(entity, explosion_damage)
                 
         elif self.state == 'shooting':
             closer_radius = self.orbit_radius * 0.4
@@ -517,8 +598,7 @@ class WeaponEntity:
                     self.state = 'orbit' 
                 
         elif self.state == 'disappeared':
-            # FIX COOLDOWN BOMB: Tăng thời gian hồi của Bomb lên 1.8 giây, các vũ khí khác là 0.5 giây
-            respawn_cooldown = 1800 if self.thrown_weapon_type == 'bomb' else 500
+            respawn_cooldown = 1800 if self.thrown_weapon_type in ['bomb', 'bomb1', 'bomb2'] else 500
             if current_time - self.action_time >= respawn_cooldown:
                 self.state = 'orbit'
 
@@ -588,6 +668,16 @@ def load_weapon_images():
                         
                 except Exception as e:
                     print(f"Không thể tải ảnh {file_name}: {e}")
+                    
+    # Tải ảnh bom độc
+    try:
+        tb_img = pygame.image.load(os.path.join('specialskill', 'bomb2.png')).convert_alpha()
+        weapons['toxic_bomb'] = pygame.transform.scale(tb_img, (int(70 / 1.2), int(70 / 1.2)))
+    except Exception as e:
+        print(f"Lỗi tải bom độc (specialskill/bomb2.png): {e}")
+        dummy_tb = pygame.Surface((58, 58), pygame.SRCALPHA)
+        pygame.draw.circle(dummy_tb, (150, 30, 200), (29, 29), 20)
+        weapons['toxic_bomb'] = dummy_tb
             
     if 'sword' not in weapons:
         dummy = pygame.Surface((70, 70), pygame.SRCALPHA)
@@ -620,7 +710,7 @@ def draw_text_with_shadow(text, font, color, surface, x, y):
 def weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_out, transition_in):
     global SELECTED_WEAPON
     weapons_data = load_weapon_images()
-    weapon_names = list(weapons_data.keys())
+    weapon_names = [n for n in list(weapons_data.keys()) if n != 'toxic_bomb']
     
     if SELECTED_WEAPON not in weapon_names and weapon_names:
         SELECTED_WEAPON = weapon_names[0]
