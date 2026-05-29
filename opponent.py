@@ -24,8 +24,8 @@ class EnemyNor:
         
         self.angle = 0 
 
-        # --- THÊM THEO YÊU CẦU: Hệ thống máu ---
-        self.max_health = 100  # Bạn có thể điều chỉnh tùy ý
+        # --- Hệ thống máu ---
+        self.max_health = 100  # Bạn có thể điều chỉnh lượng máu tùy ý
         self.health = self.max_health
         
         # Tạo khung Hitbox Rect cố định để đồng bộ với cơ chế check va chạm của Vũ khí
@@ -53,11 +53,11 @@ class EnemyNor:
             self.x += (dx / dist) * self.speed * dt
             self.y += (dy / dist) * self.speed * dt
             
-            # --- FIX LỖI HƯỚNG MẶT Ở ĐÂY ---
+            # --- Xử lý hướng mặt ---
             # Cộng thêm 180 độ vì ảnh gốc của con Nor đang hướng sang trái
             self.angle = math.degrees(math.atan2(-dy, dx)) + 180
 
-        # Cập nhật vị trí Hitbox liên tục để Vũ khí đâm trúng
+        # Cập nhật vị trí Hitbox liên tục để vũ khí đâm trúng
         self.rect.center = (int(self.x), int(self.y))
 
         # Xử lý animation
@@ -78,31 +78,37 @@ class EnemyNor:
 
     def draw(self, screen, camera_x, camera_y):
         if not self.frames: return
+        
+        # Tọa độ vẽ sau khi trừ đi camera
         draw_x = int(self.x - camera_x)
         draw_y = int(self.y - camera_y)
         
+        # Xoay và vẽ quái vật
         img = self.frames[self.frame_index]
         rotated_img = pygame.transform.rotate(img, self.angle)
         rect = rotated_img.get_rect(center=(draw_x, draw_y))
         
         screen.blit(rotated_img, rect)
 
-        # --- THÊM THEO YÊU CẦU: Vẽ thanh máu Pixel nhỏ trên đầu ---
-        if self.health < self.max_health: # Chỉ hiện khi quái bị mất máu để đỡ rối mắt
-            bar_width = 32   # Chiều rộng thanh máu thanh mảnh kiểu pixel
-            bar_height = 4   # Chiều cao thanh máu
-            offset_y = 25    # Khoảng cách trên đầu quái
+        # --- Thanh máu Pixel nhỏ gọn trên đầu ---
+        if self.health < self.max_health: # Chỉ hiện khi quái bị mất máu
+            bar_width = 20   # Chiều ngang thanh máu
+            bar_height = 3   # Chiều cao thanh máu mỏng chuẩn pixel
+            offset_y = 20    # Khoảng cách so với tâm quái vật
             
-            # Tọa độ thanh máu theo camera
+            # Tọa độ góc trên bên trái của thanh máu
             bx = draw_x - bar_width // 2
             by = draw_y - offset_y
             
-            # 1. Vẽ Viền đen (Pixel Border)
-            pygame.draw.rect(screen, (0, 0, 0), (bx - 1, by - 1, bar_width + 2, bar_height + 2), 1)
-            # 2. Vẽ Nền máu xám/đỏ sẫm (Empty Health)
-            pygame.draw.rect(screen, (60, 20, 20), (bx, by, bar_width, bar_height))
-            # 3. Vẽ Thanh máu hiện tại (Current Health - Màu xanh lá pixel)
+            # 1. Vẽ viền đen (Pixel Border) bằng khối màu đen đặc bọc ngoài
+            pygame.draw.rect(screen, (0, 0, 0), (bx - 1, by - 1, bar_width + 2, bar_height + 2))
+            
+            # 2. Vẽ Nền máu trống (Empty Health) - Màu đỏ sẫm
+            pygame.draw.rect(screen, (50, 15, 15), (bx, by, bar_width, bar_height))
+            
+            # 3. Vẽ Thanh máu hiện tại (Current Health) - Màu xanh lá pixel
             health_ratio = self.health / self.max_health
             current_bar_width = int(bar_width * health_ratio)
+            
             if current_bar_width > 0:
-                pygame.draw.rect(screen, (50, 220, 80), (bx, by, current_bar_width, bar_height))
+                pygame.draw.rect(screen, (60, 230, 60), (bx, by, current_bar_width, bar_height))

@@ -14,9 +14,9 @@ SPECIAL_ASSETS = {
     'wrench_img': None,  
     'tank_img': None,
     'rocket_img': None,
-    'bomb_normal_img': None,   # Bom thường (80%)
-    'bomb_special_img': None,  # Bom độc (20%)
-    'bomb_orbit_img': None     # THÊM: Bom hiển thị lúc xoay (bomb1)
+    'bomb_normal_img': None,   
+    'bomb_special_img': None,  
+    'bomb_orbit_img': None     
 }
 
 def init_special_assets():
@@ -66,7 +66,6 @@ def init_special_assets():
     pygame.draw.circle(rocket, (255, 200, 0), (3, 7), 3)
     SPECIAL_ASSETS['rocket_img'] = rocket
 
-    # BOM THƯỜNG DÙNG ẢNH BOMB2 TRONG WEAPON
     try:
         SPECIAL_ASSETS['bomb_normal_img'] = pygame.transform.scale(pygame.image.load(os.path.join('weapon', 'bomb2.png')).convert_alpha(), (35, 35))
     except:
@@ -75,7 +74,6 @@ def init_special_assets():
         pygame.draw.rect(dummy_b1, (220, 60, 60), (16, 2, 3, 5)) 
         SPECIAL_ASSETS['bomb_normal_img'] = dummy_b1
 
-    # BOM TỶ LỆ 20% DÙNG ẢNH BOMB2 TRONG SPECIALSKILL
     try:
         SPECIAL_ASSETS['bomb_special_img'] = pygame.transform.scale(pygame.image.load(os.path.join('specialskill', 'bomb2.png')).convert_alpha(), (42, 42))
     except:
@@ -85,7 +83,6 @@ def init_special_assets():
         pygame.draw.rect(dummy_b2, (150, 255, 50), (20, 2, 3, 5))  
         SPECIAL_ASSETS['bomb_special_img'] = dummy_b2
 
-    # THÊM THEO YÊU CẦU: ẢNH BOMB1 TRONG WEAPON ĐỂ HIỆN KHI XOAY
     try:
         SPECIAL_ASSETS['bomb_orbit_img'] = pygame.transform.scale(pygame.image.load(os.path.join('weapon', 'bomb1.png')).convert_alpha(), (36, 36))
     except:
@@ -121,7 +118,6 @@ class ParticleManager:
                 'life': 255, 'decay': random.uniform(10, 20), 'type': 'spark'
             })
             
-    # HIỆU ỨNG NỔ CỦA FLOWER 1 (Dùng khi cánh hoa nhỏ nổ ra)
     def spawn_flower1_explosion(self, x, y):
         flower_colors = [(255, 105, 180), (255, 192, 203), (220, 20, 60), (255, 240, 245)]
         for _ in range(20):
@@ -135,16 +131,15 @@ class ParticleManager:
                 'life': 255, 'decay': random.uniform(12, 22), 'type': 'spark'
             })
 
-    # THÊM THEO YÊU CẦU: HIỆU ỨNG NỔ FLOWER 2 TO VÀ HOÀNH TRÁNG HƠN
     def spawn_flower2_explosion(self, x, y):
         flower2_colors = [(255, 20, 147), (255, 105, 180), (255, 192, 203), (220, 20, 60), (255, 255, 255), (255, 215, 0)]
-        for _ in range(70):  # Tăng lên 70 hạt hoành tráng
+        for _ in range(70):
             angle = random.uniform(0, math.pi * 2)
-            speed = random.uniform(4, 13)  # Tốc độ bay mạnh và xa hơn
+            speed = random.uniform(4, 13)
             self.particles.append({
                 'x': x, 'y': y,
                 'vx': math.cos(angle) * speed, 'vy': math.sin(angle) * speed,
-                'radius': random.uniform(4, 11),  # Hạt vụn to rõ nét hơn
+                'radius': random.uniform(4, 11),
                 'color': random.choice(flower2_colors),
                 'life': 255, 'decay': random.uniform(6, 13), 'type': 'spark'
             })
@@ -185,7 +180,7 @@ class ParticleManager:
                 surface.blit(surf, (int(p['x'] - p['radius'] - camera_x), int(p['y'] - p['radius'] - camera_y)))
 
 # ==========================================
-# CHECK VA CHẠM LINH HOẠT
+# CÔNG CỤ VA CHẠM VÀ GÂY SÁT THƯƠNG
 # ==========================================
 def check_collision_flexible(rect, projectile_x, projectile_y, enemy):
     if hasattr(enemy, 'rect') and isinstance(enemy.rect, pygame.Rect):
@@ -197,8 +192,20 @@ def check_collision_flexible(rect, projectile_x, projectile_y, enemy):
             return math.hypot(ex - projectile_x, ey - projectile_y) < 25
     return False
 
+def deal_damage(entity, amount):
+    """ Hàm trừ máu chuẩn để đảm bảo an toàn không gây crash game """
+    try:
+        if hasattr(entity, 'take_damage'):
+            entity.take_damage(amount)
+        elif hasattr(entity, 'hp'):
+            entity.hp -= amount
+        elif hasattr(entity, 'health'):
+            entity.health -= amount
+    except Exception:
+        pass
+
 # ==========================================
-# CLASS KHÓI ĐỘC TỒN TẠI 3 GIÂY (STYLE PIXEL)
+# CÁC CLASS KỸ NĂNG ĐẶC BIỆT
 # ==========================================
 class ToxicCloudEntity:
     def __init__(self, x, y):
@@ -237,8 +244,7 @@ class ToxicCloudEntity:
                 ey = e.rect.centery if hasattr(e, 'rect') else getattr(e, 'y', None)
                 if ex is not None and ey is not None:
                     if math.hypot(ex - self.x, ey - self.y) < 85: 
-                        if hasattr(e, 'take_damage'): e.take_damage(6)
-                        elif hasattr(e, 'hp'): e.hp -= 6
+                        deal_damage(e, 6) # Sát thương độc rút máu
         return True
 
     def draw(self, surface, camera_x=0, camera_y=0):
@@ -260,9 +266,6 @@ class ToxicCloudEntity:
             pygame.draw.circle(puff_surf, (r, g, b, final_a), (current_size, current_size), current_size)
             surface.blit(puff_surf, (px - current_size, py - current_size))
 
-# ==========================================
-# CLASS PROJECTILE BOM THƯỜNG
-# ==========================================
 class BombProjectileEntity:
     def __init__(self, start_x, start_y, target_x, target_y, is_special_bomb, manager):
         self.x, self.y, self.manager = start_x, start_y, manager
@@ -289,7 +292,12 @@ class BombProjectileEntity:
         if random.random() < 0.3:
             self.manager.particle_sys.spawn_smoke(self.x, self.y)
 
-        hit = any(check_collision_flexible(self.rect, self.x, self.y, e) for e in entities)
+        hit = False
+        for e in entities:
+            if check_collision_flexible(self.rect, self.x, self.y, e):
+                hit = True
+                break
+                
         if hit or self.dist_traveled >= self.max_dist:
             if self.is_special_bomb:
                 self.manager.particle_sys.spawn_bomb2_explosion(self.x, self.y)
@@ -299,8 +307,7 @@ class BombProjectileEntity:
                     ey = e.rect.centery if hasattr(e, 'rect') else getattr(e, 'y', None)
                     if ex is not None and ey is not None:
                         if math.hypot(ex - self.x, ey - self.y) < 100:
-                            if hasattr(e, 'take_damage'): e.take_damage(75)
-                            elif hasattr(e, 'hp'): e.hp -= 75
+                            deal_damage(e, 75) # Nổ độc to
             else:
                 self.manager.particle_sys.spawn_explosion(self.x, self.y)
                 for e in entities:
@@ -308,8 +315,7 @@ class BombProjectileEntity:
                     ey = e.rect.centery if hasattr(e, 'rect') else getattr(e, 'y', None)
                     if ex is not None and ey is not None:
                         if math.hypot(ex - self.x, ey - self.y) < 60:
-                            if hasattr(e, 'take_damage'): e.take_damage(40)
-                            elif hasattr(e, 'hp'): e.hp -= 40
+                            deal_damage(e, 40) # Nổ thường
             return False
         return True
 
@@ -317,20 +323,18 @@ class BombProjectileEntity:
         rotated_image = pygame.transform.rotate(self.image, self.display_angle)
         surface.blit(rotated_image, rotated_image.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y))))
 
-# ==========================================
-# THÊM THEO YÊU CẦU: CLASS QUẢ BOM XOAY (BOMB ORBIT)
-# ==========================================
 class BombOrbitEntity:
     def __init__(self):
-        self.image = SPECIAL_ASSETS['bomb_orbit_img'] # Hiện bomb1 lúc xoay quanh người
+        self.image = SPECIAL_ASSETS['bomb_orbit_img'] 
         self.rect = self.image.get_rect()
         self.state = 'orbit'
-        self.angle = 0 # Góc xoay lệch góc của hoa để không đè lên nhau
+        self.angle = 0 
         self.display_angle = 0
         self.x, self.y, self.vx, self.vy = 0, 0, 0, 0
         self.manager_ref = None
         self.dist_traveled, self.max_dist = 0, 0
         self.is_special_bomb = False
+        self.last_orbit_hit_time = 0 # Thêm thời gian đếm hồi chiêu cho orbit
 
     def throw(self, tx, ty, sx, sy, manager):
         if self.state == 'orbit':
@@ -347,7 +351,6 @@ class BombOrbitEntity:
             else:
                 self.vx, self.vy = speed, 0
             
-            # Khi ném đi, quả bom tích tụ này có 40% biến thành bom độc khổng lồ, còn lại nổ cực to
             self.is_special_bomb = random.random() < 0.40
             self.image = SPECIAL_ASSETS['bomb_special_img'] if self.is_special_bomb else SPECIAL_ASSETS['bomb_normal_img']
 
@@ -358,6 +361,18 @@ class BombOrbitEntity:
             self.y = py + math.sin(math.radians(self.angle)) * 80
             self.display_angle = (self.display_angle + 12) % 360
             self.rect.center = (int(self.x), int(self.y))
+            
+            # --- CẬP NHẬT GÂY SÁT THƯƠNG KHI BOM QUAY QUANH NGƯỜI ---
+            current_time = pygame.time.get_ticks()
+            if current_time - self.last_orbit_hit_time > 400:
+                hit_anything = False
+                for e in entities:
+                    if check_collision_flexible(self.rect, self.x, self.y, e):
+                        deal_damage(e, 20)
+                        hit_anything = True
+                if hit_anything:
+                    self.last_orbit_hit_time = current_time
+                    
         elif self.state == 'thrown':
             self.x += self.vx
             self.y += self.vy
@@ -368,7 +383,12 @@ class BombOrbitEntity:
             if random.random() < 0.3:
                 self.manager_ref.particle_sys.spawn_smoke(self.x, self.y)
 
-            hit = any(check_collision_flexible(self.rect, self.x, self.y, e) for e in entities)
+            hit = False
+            for e in entities:
+                if check_collision_flexible(self.rect, self.x, self.y, e):
+                    hit = True
+                    break
+                    
             if hit or self.dist_traveled >= self.max_dist:
                 if self.is_special_bomb:
                     self.manager_ref.particle_sys.spawn_bomb2_explosion(self.x, self.y)
@@ -378,8 +398,7 @@ class BombOrbitEntity:
                         ey = e.rect.centery if hasattr(e, 'rect') else getattr(e, 'y', None)
                         if ex is not None and ey is not None:
                             if math.hypot(ex - self.x, ey - self.y) < 120:
-                                if hasattr(e, 'take_damage'): e.take_damage(90)
-                                elif hasattr(e, 'hp'): e.hp -= 90
+                                deal_damage(e, 90)
                 else:
                     self.manager_ref.particle_sys.spawn_explosion(self.x, self.y)
                     for e in entities:
@@ -387,8 +406,7 @@ class BombOrbitEntity:
                         ey = e.rect.centery if hasattr(e, 'rect') else getattr(e, 'y', None)
                         if ex is not None and ey is not None:
                             if math.hypot(ex - self.x, ey - self.y) < 80:
-                                if hasattr(e, 'take_damage'): e.take_damage(60)
-                                elif hasattr(e, 'hp'): e.hp -= 60
+                                deal_damage(e, 60)
                 return False
         return True
 
@@ -396,9 +414,6 @@ class BombOrbitEntity:
         ri = pygame.transform.rotate(self.image, self.display_angle)
         surface.blit(ri, ri.get_rect(center=(int(self.x - cx), int(self.y - cy))))
 
-# ==========================================
-# CLASS TANK VÀ CÁC THÀNH PHẦN KHÁC
-# ==========================================
 class RocketEntity:
     def __init__(self, x, y, target_angle, manager):
         self.x, self.y, self.manager = x, y, manager
@@ -418,8 +433,7 @@ class RocketEntity:
         for e in entities:
             if check_collision_flexible(self.rect, self.x, self.y, e):
                 self.manager.particle_sys.spawn_explosion(self.x, self.y)
-                if hasattr(e, 'take_damage'): e.take_damage(50)
-                elif hasattr(e, 'hp'): e.hp -= 50
+                deal_damage(e, 50) # CẬP NHẬT: Tên lửa gây sát thương
                 return False 
         if self.x < -2000 or self.x > 5000 or self.y < -2000 or self.y > 5000:
             return False
@@ -519,7 +533,13 @@ class WrenchProjectileEntity:
         self.display_angle = (self.display_angle + self.spin_speed) % 360
         self.rect.center = (int(self.x), int(self.y))
         
-        hit = any(check_collision_flexible(self.rect, self.x, self.y, e) for e in entities)
+        hit = False
+        for e in entities:
+            if check_collision_flexible(self.rect, self.x, self.y, e):
+                deal_damage(e, 35) # CẬP NHẬT: Cờ lê ném trúng gây 35 dmg
+                hit = True
+                break
+                
         if hit or self.dist_traveled >= self.max_dist:
             self.manager.particle_sys.spawn_explosion(self.x, self.y)
             self.manager.active_tanks.append(TankEntity(self.x, self.y, self.manager))
@@ -530,9 +550,6 @@ class WrenchProjectileEntity:
         rotated_image = pygame.transform.rotate(self.image, self.display_angle)
         surface.blit(rotated_image, rotated_image.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y))))
 
-# =========================================================
-# SỬA ĐỔI: THÊM HIỆU ỨNG NỔ FLOWER 1 KHI VA CHẠM / DỪNG
-# =========================================================
 class SubFlowerEntity:
     def __init__(self, x, y, angle_rad, manager):
         self.x, self.y, self.manager = x, y, manager
@@ -546,9 +563,16 @@ class SubFlowerEntity:
             self.vx, self.vy = self.vx * 0.92, self.vy * 0.92
             self.display_angle = (self.display_angle + 18) % 360
             self.rect.center = (int(self.x), int(self.y))
-            if any(check_collision_flexible(self.rect, self.x, self.y, e) for e in entities) or math.hypot(self.vx, self.vy) < 1.0:
+            
+            hit = False
+            for e in entities:
+                if check_collision_flexible(self.rect, self.x, self.y, e):
+                    deal_damage(e, 30) # CẬP NHẬT: Hoa con văng trúng gây 30 dmg
+                    hit = True
+                    break
+                    
+            if hit or math.hypot(self.vx, self.vy) < 1.0:
                 self.state = 'exploded'
-                # THÊM THEO YÊU CẦU: Tạo vụ nổ hạt cho từng bông flower1 khi tung ra rồi đụng độ
                 if self.manager:
                     self.manager.particle_sys.spawn_flower1_explosion(self.x, self.y)
                 return False
@@ -565,6 +589,7 @@ class Flower2Entity:
         self.rect = self.image.get_rect()
         self.state, self.angle, self.display_angle = 'orbit', 180, 0
         self.x, self.y, self.vx, self.vy, self.manager_ref = 0, 0, 0, 0, None
+        self.last_orbit_hit_time = 0
         
     def throw(self, tx, ty, sx, sy, manager):
         if self.state == 'orbit':
@@ -580,15 +605,33 @@ class Flower2Entity:
             self.y = py + math.sin(math.radians(self.angle))*80
             self.display_angle = -self.angle - 45
             self.rect.center = (int(self.x), int(self.y))
+            
+            # --- CẬP NHẬT GÂY SÁT THƯƠNG KHI HOA QUAY QUANH NGƯỜI ---
+            current_time = pygame.time.get_ticks()
+            if current_time - self.last_orbit_hit_time > 400:
+                hit_anything = False
+                for e in entities:
+                    if check_collision_flexible(self.rect, self.x, self.y, e):
+                        deal_damage(e, 15)
+                        hit_anything = True
+                if hit_anything:
+                    self.last_orbit_hit_time = current_time
+                    
         elif self.state == 'thrown':
             self.x, self.y, self.vx, self.vy = self.x + self.vx, self.y + self.vy, self.vx * 0.94, self.vy * 0.94
             self.display_angle = (self.display_angle + 22) % 360
             self.rect.center = (int(self.x), int(self.y))
-            if any(check_collision_flexible(self.rect, self.x, self.y, e) for e in entities) or math.hypot(self.vx, self.vy) < 1.0:
-                if self.manager_ref:
-                    # SỬA ĐỔI THEO YÊU CẦU: Gọi hiệu ứng nổ mới TO VÀ HOÀNH TRÁNG hơn cho Flower 2
-                    self.manager_ref.particle_sys.spawn_flower2_explosion(self.x, self.y)
+            
+            hit = False
+            for e in entities:
+                if check_collision_flexible(self.rect, self.x, self.y, e):
+                    deal_damage(e, 65) # CẬP NHẬT: Hoa lớn ném trúng gây 65 dmg
+                    hit = True
+                    break
                     
+            if hit or math.hypot(self.vx, self.vy) < 1.0:
+                if self.manager_ref:
+                    self.manager_ref.particle_sys.spawn_flower2_explosion(self.x, self.y)
                     ba = math.atan2(self.vy, self.vx)
                     for a in [ba - math.pi/4, ba, ba + math.pi/4]:
                         self.manager_ref.sub_flowers.append(SubFlowerEntity(self.x, self.y, a, self.manager_ref))
@@ -606,18 +649,16 @@ class SpecialSkill:
     def __init__(self):
         init_special_assets()
         self.flower_throw_count, self.active_flower2, self.sub_flowers = 0, None, []
-        self.bomb_throw_count, self.active_bomb_orbit = 0, None # THÊM: Biến quản lý bomb xoay
+        self.bomb_throw_count, self.active_bomb_orbit = 0, None
         self.active_wrenches, self.active_tanks, self.active_rockets = [], [], []
         self.active_bombs, self.active_toxic_clouds = [], [] 
         self.particle_sys = ParticleManager() 
 
     def on_player_throw_weapon(self, weapon_name, target_x, target_y, start_x, start_y):
-        # ƯU TIÊN 1: Nếu có hoa đang xoay, ném hoa đi lập tức và mất hoa trên quỹ đạo
         if self.active_flower2 and self.active_flower2.state == 'orbit':
             self.active_flower2.throw(target_x, target_y, start_x, start_y, self)
             return True 
             
-        # ƯU TIÊN 2 (SỬA ĐỔI THEO YÊU CẦU): Nếu có bom đang xoay, ném bom đi và biến mất trên quỹ đạo xoay
         if self.active_bomb_orbit and self.active_bomb_orbit.state == 'orbit':
             self.active_bomb_orbit.throw(target_x, target_y, start_x, start_y, self)
             return True
@@ -633,31 +674,30 @@ class SpecialSkill:
                 return True
 
         elif weapon_name in ['bomb1', 'bomb']:
-            # SỬA ĐỔI THEO YÊU CẦU: Tích lũy số lần ném bom để kích hoạt quả bom xoay quanh người
             self.bomb_throw_count += 1
             if self.bomb_throw_count >= 3 and not self.active_bomb_orbit:
                 self.bomb_throw_count = 0
-                self.active_bomb_orbit = BombOrbitEntity() # Tạo quả bom xoay (dùng ảnh bomb1)
+                self.active_bomb_orbit = BombOrbitEntity() 
                 
-            # Song song với đó vẫn bắn ra viên bom thường từ tay người chơi
             is_special_bomb = random.random() < 0.20
             self.active_bombs.append(BombProjectileEntity(start_x, start_y, target_x, target_y, is_special_bomb, self))
             return True 
             
         return False
 
+    def trigger(self, player_x, player_y):
+        """ Kích hoạt chủ động bằng chuột phải (Nếu có nhu cầu) """
+        pass
+
     def update(self, player_x, player_y, entities):
-        # Cập nhật Flower 2
         if self.active_flower2 and not self.active_flower2.update(player_x, player_y, entities):
             self.active_flower2 = None 
         for sub in self.sub_flowers[:]:
             if not sub.update(entities): self.sub_flowers.remove(sub)
 
-        # THÊM THEO YÊU CẦU: Cập nhật Bom Xoay
         if self.active_bomb_orbit and not self.active_bomb_orbit.update(player_x, player_y, entities):
             self.active_bomb_orbit = None
 
-        # Cập nhật các thực thể khác
         for wr in self.active_wrenches[:]:
             if not wr.update(entities): self.active_wrenches.remove(wr)
         for tank in self.active_tanks[:]:
@@ -678,7 +718,6 @@ class SpecialSkill:
         if self.active_flower2: self.active_flower2.draw(surface, camera_x, camera_y)
         for sub in self.sub_flowers: sub.draw(surface, camera_x, camera_y)
         
-        # THÊM THEO YÊU CẦU: Vẽ quả bom xoay
         if self.active_bomb_orbit: self.active_bomb_orbit.draw(surface, camera_x, camera_y)
         
         for wr in self.active_wrenches: wr.draw(surface, camera_x, camera_y)

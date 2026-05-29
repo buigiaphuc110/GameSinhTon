@@ -211,32 +211,72 @@ class EndlessEntity:
         rect = self.image.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y)))
         screen.blit(self.image, rect)
 
+# --- CLASS ENEMY ---
 class EnemyNor:
     def __init__(self, x, y, frames):
-        self.x, self.y = x, y
-        self.frames = frames
+        self.x = float(x)
+        self.y = float(y)
+        
+        # Xử lý giảm kích thước 1.4 lần và lưu đè khung hình mượt mà
+        self.frames = []
+        for frame in frames:
+            w, h = frame.get_size()
+            scaled_frame = pygame.transform.scale(frame, (int(w / 1.65), int(h / 1.4)))
+            self.frames.append(scaled_frame)
+            
         self.frame_index = 0
         self.frame_rate = 100 
         self.last_frame_time = pygame.time.get_ticks()
         
-        self.speed = 25 
-        self.radius = 25 
+        self.speed = 30 
+        self.radius = 30 / 1.4 
         self.damage_cooldown = 1000 
         self.last_damage_time = 0
+        self.angle = 0 
+
+        # Hệ thống quản lý lượng máu
+        self.max_health = 100  
+        self.health = self.max_health
+        
+        # Tạo khung Hitbox cố định
+        if self.frames:
+            fw, fh = self.frames[0].get_size()
+            self.rect = pygame.Rect(0, 0, fw, fh)
+        else:
+            self.rect = pygame.Rect(0, 0, 32, 32)
+        self.rect.center = (int(self.x), int(self.y))
+
+    def take_damage(self, amount):
+        """Hàm nhận sát thương từ vũ khí"""
+        self.health -= amount
+        if self.health < 0:
+            self.health = 0
+        return self.health <= 0  # Trả về True nếu quái hết máu (chết)
 
     def update(self, player, dt, width, height, mode_name):
-        dx, dy = player.x - self.x, player.y - self.y
+        dx = player.x - self.x
+        dy = player.y - self.y
         dist = math.hypot(dx, dy)
         
         if dist > 0:
+            # Di chuyển thẳng về phía Player
             self.x += (dx / dist) * self.speed * dt
             self.y += (dy / dist) * self.speed * dt
+            
+            # Cập nhật hướng xoay mặt quái vật
+            self.angle = math.degrees(math.atan2(-dy, dx)) + 180
 
+        # Đồng bộ vị trí Hitbox liên tục
+        self.rect.center = (int(self.x), int(self.y))
+
+        # Xử lý hoạt ảnh
         current_time = pygame.time.get_ticks()
-        if current_time - self.last_frame_time > self.frame_rate and self.frames:
-            self.frame_index = (self.frame_index + 1) % len(self.frames)
+        if current_time - self.last_frame_time > self.frame_rate:
+            if self.frames:
+                self.frame_index = (self.frame_index + 1) % len(self.frames)
             self.last_frame_time = current_time
 
+        # Gây sát thương ngược lại cho người chơi khi chạm vào
         if dist < self.radius + player.radius:
             if current_time - self.last_damage_time > self.damage_cooldown:
                 if hasattr(player, 'take_damage_and_knockback'):
@@ -247,10 +287,31 @@ class EnemyNor:
 
     def draw(self, screen, camera_x, camera_y):
         if not self.frames: return
-        draw_x, draw_y = int(self.x - camera_x), int(self.y - camera_y)
+        draw_x = int(self.x - camera_x)
+        draw_y = int(self.y - camera_y)
+        
         img = self.frames[self.frame_index]
-        rect = img.get_rect(center=(draw_x, draw_y))
-        screen.blit(img, rect)
+        rotated_img = pygame.transform.rotate(img, self.angle)
+        rect = rotated_img.get_rect(center=(draw_x, draw_y))
+        
+        screen.blit(rotated_img, rect)
+
+        # Thanh máu Pixel siêu nhỏ gọn
+        if self.health < self.max_health: 
+            bar_width = 20   
+            bar_height = 3   
+            offset_y = 20    
+            
+            bx = draw_x - bar_width // 2
+            by = draw_y - offset_y
+            
+            pygame.draw.rect(screen, (0, 0, 0), (bx - 1, by - 1, bar_width + 2, bar_height + 2))
+            pygame.draw.rect(screen, (50, 15, 15), (bx, by, bar_width, bar_height))
+            
+            health_ratio = self.health / self.max_health
+            current_bar_width = int(bar_width * health_ratio)
+            if current_bar_width > 0:
+                pygame.draw.rect(screen, (60, 230, 60), (bx, by, current_bar_width, bar_height))
 
 # --- ASSET LOADING ---
 def load_game_entities(game_assets):
@@ -391,22 +452,17 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
     all_obstacles = dirts + rocks + trees
     player = Player(WIDTH // 2, HEIGHT // 2)
     
-    # ---------------------------------------------------------
-    # SETUP WEAPON HỆ THỐNG MỚI TỪ WEAPON.PY
-    # ---------------------------------------------------------
+    # Setup Weapon
     weapon_img_path = f"weapon/{weapon.SELECTED_WEAPON}.png"
     if os.path.exists(weapon_img_path):
         w_img = pygame.image.load(weapon_img_path).convert_alpha()
     else:
-        # Dự phòng nếu vũ khí load lỗi
         w_img = pygame.Surface((40, 40), pygame.SRCALPHA)
         pygame.draw.line(w_img, (200, 200, 200), (5, 35), (35, 5), 5)
         
     player_weapon = weapon.WeaponEntity(pygame.transform.scale(w_img, (50, 50)))
 
-    # ---------------------------------------------------------
-    # SETUP SPECIAL HỆ THỐNG MỚI TỪ SPECIAL.PY
-    # ---------------------------------------------------------
+    # Setup Special Skill
     player_special = special.SpecialSkill()
     
     # State tracking
@@ -418,7 +474,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
     while running:
         dt = clock.tick(FPS) / 1000.0 
         
-        # Calculate camera offset here (needed for mouse clicks)
+        # Calculate camera offset here
         camera_x, camera_y = (int(player.x) - WIDTH // 2, int(player.y) - HEIGHT // 2) if mode_name == 'ENDLESS' else (0, 0)
         
         # 1. EVENT HANDLING
@@ -435,17 +491,11 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 target_x = mx + camera_x
                 target_y = my + camera_y
                 
-                # 🌟 THAY ĐỔI QUAN TRỌNG: Gắn hook kiểm tra kỹ năng đặc biệt
-                # Gọi kỹ năng, truyền tên vũ khí hiện tại. Hàm sẽ đếm hoặc kích hoạt kỹ năng.
                 is_special = player_special.on_player_throw_weapon(weapon.SELECTED_WEAPON, target_x, target_y, player.x, player.y)
-                
-                # Nếu hàm trả về False (chưa đủ điều kiện, ví dụ chưa ném đủ 3 lần) -> ném vũ khí thường
                 if not is_special:
                     player_weapon.throw(target_x, target_y, player.x, player.y)
 
-            # ---------------------------------------------------------
             # SỰ KIỆN KÍCH HOẠT KỸ NĂNG ĐẶC BIỆT (CHUỘT PHẢI)
-            # ---------------------------------------------------------
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
                 player_special.trigger(player.x, player.y)
 
@@ -470,7 +520,8 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             active_enemies.append(EnemyNor(sx, sy, game_assets['nor_frames']))
             enemy_spawn_timer = 5.0 
         
-        for enemy in active_enemies: enemy.update(player, dt, WIDTH, HEIGHT, mode_name)
+        for enemy in active_enemies: 
+            enemy.update(player, dt, WIDTH, HEIGHT, mode_name)
 
         # Danger/Lava/Endless Logic
         if mode_name == 'MEDIUM':
@@ -504,7 +555,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             if lavas_on_screen < 1: lava_spawn_timer -= dt
             
             if ents_on_screen < 4 or (lavas_on_screen < 1 and lava_spawn_timer <= 0):
-                # Sử dụng hàm get_valid_spawn_pos với min_entity_dist đã tăng
                 spawn_x, spawn_y = get_valid_spawn_pos(
                     camera_x, camera_y, WIDTH, HEIGHT, 
                     player.x, player.y, 
@@ -523,9 +573,8 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             player.update_lava_logic(dt)
 
         # ---------------------------------------------------------
-        # UPDATE LOGIC VŨ KHÍ 
+        # UPDATE LOGIC VŨ KHÍ & CHẶN LỖI ĐỨNG HÌNH (FREEZE)
         # ---------------------------------------------------------
-        # Tổng hợp các chướng ngại vật (rects) để vũ khí bật lại khi va chạm
         weapon_colliders = []
         if mode_name == 'ENDLESS':
             weapon_colliders.extend([ent.rect for ent in active_endless_entities])
@@ -534,20 +583,37 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             
         player_weapon.update(player.x, player.y, weapon_colliders)
         
-        # Kiểm tra va chạm giữa vũ khí và quái vật (EnemyNor) để gây sát thương
-        if player_weapon.state in ['thrown', 'returning']:
-            for enemy in active_enemies[:]:
-                # Tạo rect ảo bao quanh enemy
-                enemy_rect = pygame.Rect(enemy.x - enemy.radius, enemy.y - enemy.radius, enemy.radius*2, enemy.radius*2)
-                if player_weapon.rect.colliderect(enemy_rect):
-                    # Tiêu diệt quái
-                    active_enemies.remove(enemy)
-                    # Sau khi chém trúng quái, vũ khí thu hồi về
-                    player_weapon.state = 'returning'
+        # --- CƠ CHẾ XỬ LÝ VA CHẠM AN TOÀN TUYỆT ĐỐI VỚI VŨ KHÍ ---
+        for enemy in active_enemies[:]:
+            # 1. Trường hợp: Vũ khí đang được ném đi
+            if player_weapon.state == 'thrown' and player_weapon.rect.colliderect(enemy.rect):
+                enemy.take_damage(40) # Sát thương ném trúng
+                
+                # ÉP BUỘC VŨ KHÍ BIẾN MẤT VÀ NỔ, TUYỆT ĐỐI KHÔNG DÙNG STATE 'returning'
+                player_weapon.state = 'disappeared'
+                player_weapon.action_time = pygame.time.get_ticks()
+                player_weapon.rect.center = (-9999, -9999) # Chuyển ra ngoài map để tránh va chạm kép
+                player_weapon.explosion = weapon.WeaponExplosion(player_weapon.x, player_weapon.y, weapon.SELECTED_WEAPON)
+                
+            # 2. Trường hợp: Súng đang bắn đạn
+            elif player_weapon.state == 'shooting' and player_weapon.active_bullet:
+                # Tạo hitbox giả cho viên đạn
+                bullet_rect = pygame.Rect(0, 0, 10, 10)
+                bullet_rect.center = (int(player_weapon.active_bullet['x']), int(player_weapon.active_bullet['y']))
+                
+                if bullet_rect.colliderect(enemy.rect):
+                    enemy.take_damage(30) # Sát thương bắn súng
+                    
+                    # Cho đạn nổ và súng quay về trạng thái orbit bình thường
+                    player_weapon.explosion = weapon.WeaponExplosion(player_weapon.active_bullet['x'], player_weapon.active_bullet['y'], 'gun')
+                    player_weapon.active_bullet = None
+                    player_weapon.state = 'orbit'
+                    
+            # 3. Lọc bỏ quái chết khỏi danh sách
+            if enemy.health <= 0 and enemy in active_enemies:
+                active_enemies.remove(enemy)
 
-        # ---------------------------------------------------------
         # UPDATE LOGIC KỸ NĂNG ĐẶC BIỆT
-        # ---------------------------------------------------------
         player_special.update(player.x, player.y, active_enemies)
 
         # 3. DRAWING
@@ -585,13 +651,11 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             for ent in active_endless_entities: ent.draw_shadow(screen, camera_x, camera_y)
             for ent in active_endless_entities: ent.draw(screen, camera_x, camera_y)
 
-        # Draw Characters
+        # Draw Characters (Vẽ quái có kèm thanh máu pixel và Player)
         for enemy in active_enemies: enemy.draw(screen, camera_x, camera_y)
         player.draw(screen, draw_player_x, draw_player_y, game_assets['font_level_diff'])
         
-        # ---------------------------------------------------------
         # VẼ VŨ KHÍ VÀ KỸ NĂNG ĐẶC BIỆT LÊN MÀN HÌNH
-        # ---------------------------------------------------------
         player_weapon.draw(screen, camera_x, camera_y)
         player_special.draw(screen, camera_x, camera_y)
         

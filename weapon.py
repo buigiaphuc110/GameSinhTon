@@ -17,15 +17,12 @@ def get_flower_explosion_frames():
     global FLOWER_EXPLOSION_CACHE
     if not FLOWER_EXPLOSION_CACHE:
         try:
-            # Load ảnh sprite sheet, tự động tính toán kích thước thực tế
             sheet_path = os.path.join('weapon', 'flowerex.png')
             sheet = pygame.image.load(sheet_path).convert_alpha()
             
-            # Tính toán chiều rộng và cao của mỗi frame (chia đều 4x4)
             frame_w = sheet.get_width() // 4
             frame_h = sheet.get_height() // 4
             
-            # Cắt thành 15 frame (Bỏ frame thứ 16 cuối cùng bị lỗi)
             count = 0
             for row in range(4):
                 for col in range(4):
@@ -34,22 +31,20 @@ def get_flower_explosion_frames():
                     frame = pygame.Surface((frame_w, frame_h), pygame.SRCALPHA)
                     frame.blit(sheet, (0, 0), (col * frame_w, row * frame_h, frame_w, frame_h))
                     
-                    # --- CHỈNH SỬA: Scale frame lên x2 lần ---
                     frame = pygame.transform.scale(frame, (frame_w * 2, frame_h * 2))
                     
-                    # --- CHỈNH SỬA: Thêm độ mờ từ từ cho frame 8, 9, 10 ---
                     if count == 8:
-                        frame.set_alpha(190) # Mờ 25%
+                        frame.set_alpha(190)
                     elif count == 9:
-                        frame.set_alpha(120) # Mờ 50%
+                        frame.set_alpha(120)
                     elif count >= 10:
-                        frame.set_alpha(50)  # Mờ 80% cho các frame cuối
+                        frame.set_alpha(50)
                         
                     FLOWER_EXPLOSION_CACHE.append(frame)
                     count += 1
         except Exception as e:
             print(f"Lỗi tải flowerex.png: {e}")
-            dummy = pygame.Surface((360, 360), pygame.SRCALPHA) # Tăng kích thước dummy x2
+            dummy = pygame.Surface((360, 360), pygame.SRCALPHA)
             pygame.draw.circle(dummy, (255, 105, 180), (180, 180), 100)
             FLOWER_EXPLOSION_CACHE = [dummy] * 15
             
@@ -130,7 +125,6 @@ class WeaponExplosion:
                 })
 
         elif self.weapon_name == 'flower':
-            # --- HIỆU ỨNG HOA: FLIPBOOK 15 FRAMES ---
             self.frames = get_flower_explosion_frames()
             self.current_frame = 0
             self.animation_speed = 0.5 
@@ -151,7 +145,7 @@ class WeaponExplosion:
                     'color': random.choice(wrench_colors)
                 })
                 
-        else: # Hiệu ứng nổ nổ tung tóe chung (dành cho Bomb và các loại khác)
+        else:
             self.lifetime = 20  
             num_particles = random.randint(12, 18)
             for _ in range(num_particles):
@@ -317,6 +311,7 @@ class WeaponExplosion:
                     pygame.draw.circle(circle_surf, color, (r, r), r)
                     surface.blit(circle_surf, (self.x + p['dx'] - r - camera_x, self.y + p['dy'] - r - camera_y))
 
+
 # ==========================================
 # CƠ CHẾ VŨ KHÍ (ORBIT, THROW & EXPLODE)
 # ==========================================
@@ -347,6 +342,8 @@ class WeaponEntity:
         
         self.explosion = None
         self.active_bullet = None
+        
+        self.last_orbit_hit_time = 0 
         
     def throw(self, target_x, target_y, start_x, start_y):
         if self.state == 'orbit':
@@ -382,20 +379,32 @@ class WeaponEntity:
                     
                 else: 
                     self.state = 'thrown'
-                    speed = 22  
+                    # FIX TỐC ĐỘ BOMB: Cho Bomb bay chậm hơn bình thường
+                    speed = 12 if self.thrown_weapon_type == 'bomb' else 22  
                     self.friction = 0.94
                     self.vx = (dx / dist) * speed
                     self.vy = (dy / dist) * speed
                     
-                    # --- CHỈNH SỬA: Sword bay thẳng thay vì xoay ---
                     if self.thrown_weapon_type == 'sword':
-                        self.spin_speed = 0 # Vô hiệu hoá lực xoay
-                        self.display_angle = math.degrees(math.atan2(-dy, dx)) - 45 # Hướng thẳng mũi kiếm về phía ném
+                        self.spin_speed = 0 
+                        self.display_angle = math.degrees(math.atan2(-dy, dx)) - 45 
                     else:
                         self.spin_speed = 22
             
             self.trail.clear()
             self.explosion = None
+
+    def _deal_damage_to_entity(self, entity, amount):
+        """Hàm an toàn để gọi trừ máu quái mà không sợ game bị crash."""
+        try:
+            if hasattr(entity, 'take_damage'):
+                entity.take_damage(amount)
+            elif hasattr(entity, 'hp'):
+                entity.hp -= amount
+            elif hasattr(entity, 'health'):
+                entity.health -= amount
+        except Exception:
+            pass # Bỏ qua lỗi nếu class quái có cấu trúc bất thường để game không bị đơ
 
     def update(self, player_x, player_y, entities):
         global WEAPON_IMAGES_CACHE
@@ -406,11 +415,9 @@ class WeaponEntity:
                 self.explosion = None
         
         if self.state == 'orbit':
-            # SỬA LỖI: Tự động cập nhật hình ảnh đúng với vũ khí đang chọn trong bộ nhớ đệm
             if WEAPON_IMAGES_CACHE and SELECTED_WEAPON in WEAPON_IMAGES_CACHE:
                 if self.original_image != WEAPON_IMAGES_CACHE[SELECTED_WEAPON]:
                     self.original_image = WEAPON_IMAGES_CACHE[SELECTED_WEAPON]
-                    # Reset lại kích thước khung hitbox rect tương ứng với vũ khí mới
                     old_center = self.rect.center
                     self.rect = self.original_image.get_rect()
                     self.rect.center = old_center
@@ -422,6 +429,18 @@ class WeaponEntity:
             self.display_angle = -self.angle - 45
             self.rect.center = (int(self.x), int(self.y))
             self.trail.clear()
+
+            # --- KIỂM TRA VA CHẠM KHI QUAY (ORBIT) ---
+            if current_time - self.last_orbit_hit_time > 400: 
+                hit_anything = False
+                for entity in entities:
+                    entity_rect = entity.rect if hasattr(entity, 'rect') else entity
+                    if isinstance(entity_rect, pygame.Rect) and self.rect.colliderect(entity_rect):
+                        self._deal_damage_to_entity(entity, 10)
+                        hit_anything = True
+                
+                if hit_anything:
+                    self.last_orbit_hit_time = current_time
             
         elif self.state == 'thrown':
             self.x += self.vx
@@ -429,7 +448,6 @@ class WeaponEntity:
             self.vx *= self.friction
             self.vy *= self.friction
             
-            # --- CHỈNH SỬA: Bỏ qua cộng góc xoay (spin) nếu là kiếm ---
             if self.thrown_weapon_type != 'sword':
                 self.display_angle = (self.display_angle + self.spin_speed) % 360
             
@@ -443,10 +461,13 @@ class WeaponEntity:
             for entity in entities:
                 entity_rect = entity.rect if hasattr(entity, 'rect') else entity
                 if isinstance(entity_rect, pygame.Rect) and self.rect.colliderect(entity_rect):
+                    # --- XỬ LÝ VA CHẠM KHI NÉM MỘT CÁCH AN TOÀN ---
+                    self._deal_damage_to_entity(entity, 25)
                     hit_entity = True
-                    break
+                    break # Chỉ cần trúng 1 con là dừng vòng lặp, tránh kẹt
                     
-            if hit_entity or math.hypot(self.vx, self.vy) < 1.0:
+            if hit_entity or math.hypot(self.vx, self.vy) < 0.5:
+                # Ngay lập tức ẩn vũ khí đi tránh kẹt khung hình
                 self.state = 'disappeared'
                 self.action_time = current_time 
                 self.rect.center = (-9999, -9999) 
@@ -486,6 +507,7 @@ class WeaponEntity:
                 for entity in entities:
                     entity_rect = entity.rect if hasattr(entity, 'rect') else entity
                     if isinstance(entity_rect, pygame.Rect) and bullet_rect.colliderect(entity_rect):
+                        self._deal_damage_to_entity(entity, 15)
                         hit_entity = True
                         break
                         
@@ -495,7 +517,9 @@ class WeaponEntity:
                     self.state = 'orbit' 
                 
         elif self.state == 'disappeared':
-            if current_time - self.action_time >= 500:
+            # FIX COOLDOWN BOMB: Tăng thời gian hồi của Bomb lên 1.8 giây, các vũ khí khác là 0.5 giây
+            respawn_cooldown = 1800 if self.thrown_weapon_type == 'bomb' else 500
+            if current_time - self.action_time >= respawn_cooldown:
                 self.state = 'orbit'
 
     def draw(self, surface, camera_x=0, camera_y=0):
@@ -541,7 +565,6 @@ def load_weapon_images():
         
     ignore_files = ['flower2', 'bomb1', 'flowerex'] 
     
-    # Quy tắc đổi tên từ file ảnh vật lý sang tên định danh trong logic game
     rename_rules = {
         'flower1': 'flower',  
         'bomb2': 'bomb'       
@@ -557,8 +580,6 @@ def load_weapon_images():
                 weapon_name = rename_rules.get(base_name, base_name)
                 try:
                     img = pygame.image.load(os.path.join(folder, file_name)).convert_alpha()
-                    
-                    # --- CHỈNH SỬA: Giảm kích thước vũ khí gun, bomb, flower đi 1.2 lần (70 / 1.2 = ~58) ---
                     if weapon_name in ['gun', 'bomb', 'flower']:
                         new_size = int(70 / 1.2)
                         weapons[weapon_name] = pygame.transform.scale(img, (new_size, new_size))
@@ -568,7 +589,6 @@ def load_weapon_images():
                 except Exception as e:
                     print(f"Không thể tải ảnh {file_name}: {e}")
             
-    # --- TẠO CHẤT LIỆU DUMMY PHÒNG HỜ ---
     if 'sword' not in weapons:
         dummy = pygame.Surface((70, 70), pygame.SRCALPHA)
         pygame.draw.line(dummy, (200, 200, 200), (15, 55), (55, 15), 8) 
@@ -589,7 +609,6 @@ def load_weapon_images():
         pygame.draw.line(dummy, (200, 50, 50), (29, 8), (29, -4), 3)
         weapons['bomb'] = dummy
         
-    # Cập nhật vào bộ nhớ cache toàn cục để WeaponEntity lấy dữ liệu đồng bộ
     WEAPON_IMAGES_CACHE = weapons
     return weapons
 
