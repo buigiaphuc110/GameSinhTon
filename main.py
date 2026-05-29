@@ -5,6 +5,7 @@ import math
 import random
 import gameplay
 import weapon 
+import score # <-- KẾT NỐI VỚI HỆ THỐNG ĐIỂM (SCORE)
 
 # ==========================================
 # KHỞI TẠO VÀ CẤU HÌNH CƠ BẢN
@@ -380,7 +381,10 @@ def main_menu():
                 weapon.weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_to_black_pixel, transition_fade_in)
                 transition_fade_in(clock, lambda: screen.fill(BLACK))
             elif buttons[2][0].collidepoint((mx, my)): 
-                print("Vào SCORE...")
+                # --- THÊM THEO YÊU CẦU: Hiển thị Bảng Điểm (Score Menu) ---
+                transition_to_black_pixel(clock)
+                score.score_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_to_black_pixel, transition_fade_in)
+                transition_fade_in(clock, lambda: screen.fill(BLACK))
             elif buttons[3][0].collidepoint((mx, my)): 
                 pygame.quit()
                 sys.exit()

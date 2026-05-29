@@ -4,8 +4,9 @@ import os
 import random
 import math
 from player import Player
-import weapon  # <-- KẾT NỐI VỚI HỆ THỐNG WEAPON
-import special # <-- THÊM DÒNG NÀY ĐỂ KẾT NỐI VỚI HỆ THỐNG KỸ NĂNG (SPECIAL)
+import weapon  
+import special 
+import score 
 
 # --- CONSTANTS ---
 WHITE = (255, 255, 255)
@@ -18,30 +19,21 @@ def is_on_screen(x, y, camera_x, camera_y, width, height, buffer=200):
            (camera_y - buffer <= y <= camera_y + height + buffer)
 
 def get_valid_spawn_pos(camera_x, camera_y, width, height, player_x, player_y, existing_entities, existing_lavas, min_player_dist=400, min_entity_dist=250):
-    """
-    Tìm vị trí sinh ra vật thể mới, đảm bảo khoảng cách an toàn tuyệt đối 
-    để không bị đè lên người chơi, lava và các vật thể đã tồn tại.
-    """
-    for _ in range(100): # Tăng số lần thử nghiệm để dễ tìm vị trí trống hơn
+    for _ in range(100): 
         x = random.randint(camera_x - 100, camera_x + width + 100)
         y = random.randint(camera_y - 100, camera_y + height + 100)
         
-        # 1. Tránh xa người chơi
         if math.hypot(x - player_x, y - player_y) < min_player_dist:
             continue
             
-        # 2. Tránh đè lên các Entity khác (skull, bone, driedtree, magma)
         overlap = False
         for ent in existing_entities:
-            # Khoảng cách giữa 2 tâm vật thể phải lớn hơn min_entity_dist
             if math.hypot(x - ent.x, y - ent.y) < min_entity_dist:
                 overlap = True
                 break
         if overlap: continue
         
-        # 3. Tránh đè lên Hồ Lava
         for lava in existing_lavas:
-            # Cộng thêm radius của lava để đảm bảo an toàn tuyệt đối
             if math.hypot(x - lava.x, y - lava.y) < (min_entity_dist + lava.radius):
                 overlap = True
                 break
@@ -49,7 +41,6 @@ def get_valid_spawn_pos(camera_x, camera_y, width, height, player_x, player_y, e
         if not overlap:
             return x, y
             
-    # Fallback dự phòng nếu map lấp đầy không tìm được góc trống
     return player_x + random.choice([-600, 600]), player_y + random.choice([-600, 600])
 
 def draw_text_with_shadow(text, font, color, surface, x, y):
@@ -63,20 +54,16 @@ def draw_text_with_shadow(text, font, color, surface, x, y):
 
 def draw_health_bar(surface, x, y, health, max_health, font):
     total_width, bar_height, tag_width = 180, 22, 34
-    
-    # Background & Borders
     pygame.draw.rect(surface, (25, 25, 25), (x + 3, y + 3, total_width, bar_height))
     pygame.draw.rect(surface, BLACK, (x, y, total_width, bar_height), width=2)
     pygame.draw.rect(surface, (40, 40, 45), (x + 2, y + 2, total_width - 4, bar_height - 4))
     
-    # HP Tag
     pygame.draw.rect(surface, (170, 35, 35), (x + 2, y + 2, tag_width, bar_height - 4))
     pygame.draw.rect(surface, BLACK, (x + 2 + tag_width, y, 2, bar_height))
     hp_label = font.render("HP", True, WHITE)
     hp_label_rect = hp_label.get_rect(center=(x + 2 + tag_width // 2, y + bar_height // 2))
     surface.blit(hp_label, hp_label_rect)
     
-    # Gauge
     gauge_x = x + 2 + tag_width + 2
     gauge_width = total_width - tag_width - 6
     gauge_height = bar_height - 4
@@ -85,7 +72,6 @@ def draw_health_bar(surface, x, y, health, max_health, font):
     if health > 0:
         health_ratio = max(0.0, min(1.0, health / max_health))
         current_gauge_w = int(gauge_width * health_ratio)
-        
         if health_ratio > 0.5: main_color, light_color = (45, 200, 45), (140, 245, 140)
         elif health_ratio > 0.2: main_color, light_color = (230, 165, 30), (255, 225, 130)
         else: main_color, light_color = (215, 35, 35), (255, 130, 130)
@@ -99,7 +85,6 @@ def draw_health_bar(surface, x, y, health, max_health, font):
             if seg_x < gauge_x + current_gauge_w:
                 pygame.draw.line(surface, BLACK, (seg_x, y + 2), (seg_x, y + 1 + gauge_height), 1)
                 
-    # Status Text
     stat_str = f"{int(health)}/{max_health}"
     stat_text = font.render(stat_str, True, WHITE)
     stat_shadow = font.render(stat_str, True, BLACK)
@@ -108,42 +93,28 @@ def draw_health_bar(surface, x, y, health, max_health, font):
     surface.blit(stat_shadow, (stat_x + 2, stat_y + 2))
     surface.blit(stat_text, (stat_x, stat_y))
 
-# --- ENTITY CLASSES ---
+# --- ENTITIES THIÊN NHIÊN ---
 class DangerExplosion:
     def __init__(self, x, y, alarm_img, explosion_frames):
-        self.x, self.y = x, y
-        self.alarm_img = alarm_img
-        self.frames = explosion_frames
-        
-        self.state = "WARNING"
-        self.start_timer = pygame.time.get_ticks()
-        self.warning_duration = 1500
-        
-        self.frame_index = 0
-        self.frame_rate = 50 
-        self.last_frame_time = pygame.time.get_ticks()
-        
-        self.has_dealt_damage = False
-        self.hitbox_radius = 130 
+        self.x, self.y, self.alarm_img, self.frames = x, y, alarm_img, explosion_frames
+        self.state, self.start_timer, self.warning_duration = "WARNING", pygame.time.get_ticks(), 1500
+        self.frame_index, self.frame_rate, self.last_frame_time = 0, 50, pygame.time.get_ticks()
+        self.has_dealt_damage, self.hitbox_radius = False, 130 
 
     def update(self, player, width, height, mode_name):
         current_time = pygame.time.get_ticks()
         if self.state == "WARNING":
             if current_time - self.start_timer > self.warning_duration:
-                self.state = "EXPLODING"
-                self.last_frame_time = current_time
+                self.state, self.last_frame_time = "EXPLODING", current_time
         elif self.state == "EXPLODING":
             if current_time - self.last_frame_time > self.frame_rate:
                 self.frame_index += 1
                 self.last_frame_time = current_time
-                
                 if self.frame_index >= len(self.frames):
                     self.state = "DONE"
                     return
-                    
             if self.frame_index == 3 and not self.has_dealt_damage:
-                dist = math.hypot(player.x - self.x, player.y - self.y)
-                if dist < self.hitbox_radius + player.radius:
+                if math.hypot(player.x - self.x, player.y - self.y) < self.hitbox_radius + player.radius:
                     player.take_damage_and_knockback(20, self.x, self.y, 25, width, height, mode_name)
                     self.has_dealt_damage = True
 
@@ -151,21 +122,16 @@ class DangerExplosion:
         draw_x, draw_y = int(self.x - camera_x), int(self.y - camera_y)
         if self.state == "WARNING":
             if (pygame.time.get_ticks() // 200) % 2 == 0:
-                rect = self.alarm_img.get_rect(center=(draw_x, draw_y))
-                screen.blit(self.alarm_img, rect)
+                screen.blit(self.alarm_img, self.alarm_img.get_rect(center=(draw_x, draw_y)))
         elif self.state == "EXPLODING":
             if self.frame_index < len(self.frames):
                 img = self.frames[self.frame_index]
-                rect = img.get_rect(center=(draw_x, draw_y))
-                screen.blit(img, rect)
+                screen.blit(img, img.get_rect(center=(draw_x, draw_y)))
 
 class LavaPool:
     def __init__(self, x, y, lava_img, shadow_image=None):
-        self.x, self.y = x, y
-        self.image = lava_img
-        self.shadow_image = shadow_image
-        self.state = "ACTIVE"
-        self.radius = int(110 / 2.25) 
+        self.x, self.y, self.image, self.shadow_image = x, y, lava_img, shadow_image
+        self.state, self.radius = "ACTIVE", int(110 / 2.25) 
 
     def update(self, camera_x, camera_y, width, height):
         if not is_on_screen(self.x, self.y, camera_x, camera_y, width, height, buffer=200):
@@ -173,19 +139,14 @@ class LavaPool:
 
     def draw_shadow(self, screen, camera_x, camera_y):
         if self.shadow_image:
-            shadow_rect = self.shadow_image.get_rect(center=(int(self.x - camera_x + 2), int(self.y - camera_y + 4)))
-            screen.blit(self.shadow_image, shadow_rect)
+            screen.blit(self.shadow_image, self.shadow_image.get_rect(center=(int(self.x - camera_x + 2), int(self.y - camera_y + 4))))
 
     def draw(self, screen, camera_x, camera_y):
-        rect = self.image.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y)))
-        screen.blit(self.image, rect)
+        screen.blit(self.image, self.image.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y))))
 
 class EndlessEntity:
     def __init__(self, x, y, image, type_name, shadow_image=None):
-        self.x, self.y = x, y
-        self.type_name = type_name
-        self.image = image
-        self.shadow_image = shadow_image
+        self.x, self.y, self.type_name, self.image, self.shadow_image = x, y, type_name, image, shadow_image
         self.rect = self.image.get_rect(center=(x, y))
         self.radius = max(self.rect.width, self.rect.height) // 2
         self.state = "ACTIVE"
@@ -197,121 +158,165 @@ class EndlessEntity:
     def draw_shadow(self, screen, camera_x, camera_y):
         if self.shadow_image:
             draw_img = self.shadow_image
-            # Hiệu ứng mờ nhấp nháy cho DriedTree xung quanh alpha 20
             if self.type_name == 'driedtree':
-                alpha_val = int(20 + 2 * math.sin(pygame.time.get_ticks() / 200.0))
-                alpha_val = max(0, min(255, alpha_val))
+                alpha_val = max(0, min(255, int(20 + 2 * math.sin(pygame.time.get_ticks() / 200.0))))
                 draw_img = self.shadow_image.copy()
                 draw_img.fill((255, 255, 255, alpha_val), special_flags=pygame.BLEND_RGBA_MULT)
-
-            shadow_rect = draw_img.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y + self.rect.height//3)))
-            screen.blit(draw_img, shadow_rect)
+            screen.blit(draw_img, draw_img.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y + self.rect.height//3))))
 
     def draw(self, screen, camera_x, camera_y):
-        rect = self.image.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y)))
-        screen.blit(self.image, rect)
+        screen.blit(self.image, self.image.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y))))
 
-# --- CLASS ENEMY ---
+# ==========================================
+# CÁC CLASS QUÁI VẬT (ENEMIES)
+# ==========================================
 class EnemyNor:
     def __init__(self, x, y, frames):
-        self.x = float(x)
-        self.y = float(y)
-        
-        # Xử lý giảm kích thước 1.4 lần và lưu đè khung hình mượt mà
+        self.x, self.y = float(x), float(y)
+        self.type = 'normal'
         self.frames = []
         for frame in frames:
             w, h = frame.get_size()
-            scaled_frame = pygame.transform.scale(frame, (int(w / 1.65), int(h / 1.4)))
-            self.frames.append(scaled_frame)
+            self.frames.append(pygame.transform.scale(frame, (int(w / 1.65), int(h / 1.4))))
             
-        self.frame_index = 0
-        self.frame_rate = 100 
-        self.last_frame_time = pygame.time.get_ticks()
+        self.frame_index, self.frame_rate, self.last_frame_time = 0, 100, pygame.time.get_ticks()
+        self.speed, self.radius = 35, 30 / 1.4 
+        self.damage_cooldown, self.last_damage_time = 1000, 0
+        self.angle, self.max_health = 0, 100  
+        self.health, self.base_damage = self.max_health, 5
+        self.score_value = 10
         
-        self.speed = 30 
-        self.radius = 30 / 1.4 
-        self.damage_cooldown = 1000 
-        self.last_damage_time = 0
-        self.angle = 0 
-
-        # Hệ thống quản lý lượng máu
-        self.max_health = 100  
-        self.health = self.max_health
-        
-        # Tạo khung Hitbox cố định
-        if self.frames:
-            fw, fh = self.frames[0].get_size()
-            self.rect = pygame.Rect(0, 0, fw, fh)
-        else:
-            self.rect = pygame.Rect(0, 0, 32, 32)
-        self.rect.center = (int(self.x), int(self.y))
+        self.rect = pygame.Rect(0, 0, self.frames[0].get_size()[0], self.frames[0].get_size()[1]) if self.frames else pygame.Rect(0, 0, 32, 32)
 
     def take_damage(self, amount):
-        """Hàm nhận sát thương từ vũ khí"""
         self.health -= amount
-        if self.health < 0:
-            self.health = 0
-        return self.health <= 0  # Trả về True nếu quái hết máu (chết)
+        if self.health < 0: self.health = 0
+        return self.health <= 0 
 
-    def update(self, player, dt, width, height, mode_name):
-        dx = player.x - self.x
-        dy = player.y - self.y
+    def update(self, player, dt, width, height, mode_name, active_projectiles=None):
+        dx, dy = player.x - self.x, player.y - self.y
         dist = math.hypot(dx, dy)
-        
         if dist > 0:
-            # Di chuyển thẳng về phía Player
             self.x += (dx / dist) * self.speed * dt
             self.y += (dy / dist) * self.speed * dt
-            
-            # Cập nhật hướng xoay mặt quái vật
-            self.angle = math.degrees(math.atan2(-dy, dx)) + 180
+            # FIX: Quái nhìn thẳng vào player (Bỏ +180)
+            self.angle = math.degrees(math.atan2(-dy, dx)) 
 
-        # Đồng bộ vị trí Hitbox liên tục
         self.rect.center = (int(self.x), int(self.y))
-
-        # Xử lý hoạt ảnh
+        
         current_time = pygame.time.get_ticks()
         if current_time - self.last_frame_time > self.frame_rate:
-            if self.frames:
-                self.frame_index = (self.frame_index + 1) % len(self.frames)
+            if self.frames: self.frame_index = (self.frame_index + 1) % len(self.frames)
             self.last_frame_time = current_time
 
-        # Gây sát thương ngược lại cho người chơi khi chạm vào
         if dist < self.radius + player.radius:
             if current_time - self.last_damage_time > self.damage_cooldown:
                 if hasattr(player, 'take_damage_and_knockback'):
-                    player.take_damage_and_knockback(5, self.x, self.y, 10, width, height, mode_name)
-                else:
-                    player.health -= 5
+                    player.take_damage_and_knockback(self.base_damage, self.x, self.y, 10, width, height, mode_name)
+                else: player.health -= self.base_damage
                 self.last_damage_time = current_time
 
     def draw(self, screen, camera_x, camera_y):
         if not self.frames: return
-        draw_x = int(self.x - camera_x)
-        draw_y = int(self.y - camera_y)
+        draw_x, draw_y = int(self.x - camera_x), int(self.y - camera_y)
+        rotated_img = pygame.transform.rotate(self.frames[self.frame_index], self.angle)
+        screen.blit(rotated_img, rotated_img.get_rect(center=(draw_x, draw_y)))
         
-        img = self.frames[self.frame_index]
-        rotated_img = pygame.transform.rotate(img, self.angle)
-        rect = rotated_img.get_rect(center=(draw_x, draw_y))
-        
-        screen.blit(rotated_img, rect)
-
-        # Thanh máu Pixel siêu nhỏ gọn
         if self.health < self.max_health: 
-            bar_width = 20   
-            bar_height = 3   
-            offset_y = 20    
-            
-            bx = draw_x - bar_width // 2
-            by = draw_y - offset_y
-            
-            pygame.draw.rect(screen, (0, 0, 0), (bx - 1, by - 1, bar_width + 2, bar_height + 2))
-            pygame.draw.rect(screen, (50, 15, 15), (bx, by, bar_width, bar_height))
-            
-            health_ratio = self.health / self.max_health
-            current_bar_width = int(bar_width * health_ratio)
-            if current_bar_width > 0:
-                pygame.draw.rect(screen, (60, 230, 60), (bx, by, current_bar_width, bar_height))
+            bx, by = draw_x - 10, draw_y - 20
+            pygame.draw.rect(screen, (0, 0, 0), (bx - 1, by - 1, 22, 5))
+            pygame.draw.rect(screen, (50, 15, 15), (bx, by, 20, 3))
+            if self.health > 0:
+                pygame.draw.rect(screen, (60, 230, 60), (bx, by, int(20 * (self.health / self.max_health)), 3))
+
+class EnemyNorBig(EnemyNor):
+    def __init__(self, x, y, frames):
+        super().__init__(x, y, frames)
+        self.type = 'big'
+        # Scale x2
+        self.frames = [pygame.transform.scale(f, (f.get_width() * 2, f.get_height() * 2)) for f in self.frames]
+        self.speed, self.radius = 45, 60 / 1.4 
+        self.max_health = 300
+        self.health, self.base_damage = self.max_health, 15
+        self.score_value = 30
+        self.rect = pygame.Rect(0, 0, self.frames[0].get_size()[0], self.frames[0].get_size()[1]) if self.frames else pygame.Rect(0, 0, 64, 64)
+
+    def draw(self, screen, camera_x, camera_y):
+        super().draw(screen, camera_x, camera_y)
+        if self.health < self.max_health: 
+            bx, by = int(self.x - camera_x) - 20, int(self.y - camera_y) - 40
+            pygame.draw.rect(screen, (0, 0, 0), (bx - 1, by - 1, 42, 6))
+            pygame.draw.rect(screen, (50, 15, 15), (bx, by, 40, 4))
+            if self.health > 0:
+                pygame.draw.rect(screen, (60, 230, 60), (bx, by, int(40 * (self.health / self.max_health)), 4))
+
+class PoisonBullet:
+    def __init__(self, x, y, target_x, target_y):
+        self.x, self.y = x, y
+        dx, dy = target_x - x, target_y - y
+        dist = math.hypot(dx, dy)
+        speed = 8.0
+        self.vx = (dx / dist) * speed if dist > 0 else speed
+        self.vy = (dy / dist) * speed if dist > 0 else 0
+        self.radius = 8
+        self.life = 100
+
+    def update(self):
+        self.x += self.vx
+        self.y += self.vy
+        self.life -= 1
+        return self.life > 0
+
+    def draw(self, screen, camera_x, camera_y):
+        pygame.draw.circle(screen, (50, 255, 50), (int(self.x - camera_x), int(self.y - camera_y)), self.radius)
+        pygame.draw.circle(screen, (200, 255, 200), (int(self.x - camera_x), int(self.y - camera_y)), self.radius // 2)
+
+class EnemyNorGreen(EnemyNor):
+    def __init__(self, x, y, frames):
+        super().__init__(x, y, frames)
+        self.type = 'green'
+        self.speed = 25 
+        self.max_health = 80
+        self.health = self.max_health
+        self.score_value = 20
+        self.fire_rate = 2000
+        self.last_shot_time = pygame.time.get_ticks()
+        
+        # Nhuộm xanh lá
+        colored_frames = []
+        for f in self.frames:
+            new_f = f.copy()
+            tint = pygame.Surface(new_f.get_size(), pygame.SRCALPHA)
+            tint.fill((0, 200, 0, 120))
+            new_f.blit(tint, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            colored_frames.append(new_f)
+        self.frames = colored_frames
+
+    def update(self, player, dt, width, height, mode_name, active_projectiles):
+        dx, dy = player.x - self.x, player.y - self.y
+        dist = math.hypot(dx, dy)
+        
+        self.angle = math.degrees(math.atan2(-dy, dx))
+        
+        # Giữ khoảng cách 250px
+        if dist > 250:
+            self.x += (dx / dist) * self.speed * dt
+            self.y += (dy / dist) * self.speed * dt
+        elif dist < 200: # Lùi lại nếu quá gần
+            self.x -= (dx / dist) * self.speed * dt
+            self.y -= (dy / dist) * self.speed * dt
+
+        self.rect.center = (int(self.x), int(self.y))
+        
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_frame_time > self.frame_rate:
+            if self.frames: self.frame_index = (self.frame_index + 1) % len(self.frames)
+            self.last_frame_time = current_time
+
+        # Bắn đạn độc
+        if dist < 400 and current_time - self.last_shot_time > self.fire_rate:
+            active_projectiles.append(PoisonBullet(self.x, self.y, player.x, player.y))
+            self.last_shot_time = current_time
 
 # --- ASSET LOADING ---
 def load_game_entities(game_assets):
@@ -400,7 +405,6 @@ def load_game_entities(game_assets):
                 nor_frames.append(dummy)
         game_assets['nor_frames'] = nor_frames
         
-    # Load Endless Entities
     new_entities = {
         'driedtree': {'fb_col': (70,50,40), 'fb_size': (45,65), 'shadow': True, 's_alpha': 20},
         'bone':      {'fb_col': (220,220,200), 'fb_size': (25,12), 'shadow': False},
@@ -425,18 +429,35 @@ def load_game_entities(game_assets):
                 pygame.draw.ellipse(shadow, (0, 0, 0, conf.get('s_alpha', 20)), (0, 0, w, max(1, h // 2)))
                 game_assets[f'{key}_shadow'] = shadow
 
+# ==========================================
+# CẤU HÌNH SỐ LƯỢNG QUÁI MỖI WAVE
+# ==========================================
+def get_wave_enemies(mode_name, wave_num):
+    """Tính toán lượng quái sẽ xuất hiện ở màn hiện tại"""
+    multiplier = 1.0
+    if mode_name == 'MEDIUM': multiplier = 1.5
+    elif mode_name == 'HARD': multiplier = 2.0
+    elif mode_name == 'ENDLESS': multiplier = 1.0 + (wave_num * 0.2)
+    
+    # Công thức sinh quái cơ bản
+    normal_count = int((5 + wave_num * 3) * multiplier)
+    green_count = int((wave_num // 2) * 1.5 * multiplier) # Từ wave 2 bắt đầu có
+    big_count = int((wave_num // 3) * 1.2 * multiplier)   # Từ wave 3 bắt đầu có
+    
+    enemies_list = ['normal'] * normal_count + ['green'] * green_count + ['big'] * big_count
+    random.shuffle(enemies_list)
+    return enemies_list
+
 # --- MAIN LOOP ---
 def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mode_name, ground_key):
     load_game_entities(game_assets)
     
-    # Initialize basic elements
     dirts, rocks, grasses, trees = [], [], [], []
     dirt_w, dirt_h = game_assets['dirt'].get_size()
     rock_w, rock_h = game_assets['rock'].get_size()
     grass_w, grass_h = game_assets['grass'].get_size()
     tree_w, tree_h = game_assets['tree'].get_size()
 
-    # Layout generation
     if mode_name == 'EASY':
         dirts = [pygame.Rect(x, y, dirt_w, dirt_h) for x,y in [(140, 160), (640, 130), (200, 450), (580, 420)]]
         rocks = [pygame.Rect(x, y, rock_w, rock_h) for x,y in [(320, 110), (120, 310), (660, 460)]]
@@ -452,7 +473,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
     all_obstacles = dirts + rocks + trees
     player = Player(WIDTH // 2, HEIGHT // 2)
     
-    # Setup Weapon
     weapon_img_path = f"weapon/{weapon.SELECTED_WEAPON}.png"
     if os.path.exists(weapon_img_path):
         w_img = pygame.image.load(weapon_img_path).convert_alpha()
@@ -461,22 +481,34 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         pygame.draw.line(w_img, (200, 200, 200), (5, 35), (35, 5), 5)
         
     player_weapon = weapon.WeaponEntity(pygame.transform.scale(w_img, (50, 50)))
-
-    # Setup Special Skill
     player_special = special.SpecialSkill()
     
-    # State tracking
-    active_dangers, active_lavas, active_endless_entities, active_enemies = [], [], [], []
-    danger_spawn_timer, lava_spawn_timer, enemy_spawn_timer = 3.0, 0.0, 5.0
+    score.game_score.reset_score()
+    
+    active_dangers, active_lavas, active_endless_entities = [], [], []
+    danger_spawn_timer, lava_spawn_timer = 3.0, 0.0
     player_in_lava = False
+
+    # --- WAVE SYSTEM VARIABLES ---
+    current_wave = 1
+    max_waves = 10 if mode_name != 'ENDLESS' else 999999
+    enemies_to_spawn = get_wave_enemies(mode_name, current_wave)
+    active_enemies = []
+    enemy_projectiles = []
+    enemy_spawn_timer = 0.5
+    game_state = "PLAYING" # PLAYING, WAVE_TRANSITION, WON
+    transition_timer = 0
+
+    # --- PLAYER POISON SYSTEM ---
+    player_poison_time_left = 0
+    player_last_poison_tick = 0
 
     running = True
     while running:
         dt = clock.tick(FPS) / 1000.0 
-        
-        # Calculate camera offset here
         camera_x, camera_y = (int(player.x) - WIDTH // 2, int(player.y) - HEIGHT // 2) if mode_name == 'ENDLESS' else (0, 0)
-        
+        current_time = pygame.time.get_ticks()
+
         # 1. EVENT HANDLING
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
@@ -485,45 +517,83 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE: 
                 running = False
                 
-            # SỰ KIỆN NÉM VŨ KHÍ (CHUỘT TRÁI):
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and game_state == "PLAYING":
                 mx, my = pygame.mouse.get_pos()
                 target_x = mx + camera_x
                 target_y = my + camera_y
-                
                 is_special = player_special.on_player_throw_weapon(weapon.SELECTED_WEAPON, target_x, target_y, player.x, player.y)
                 if not is_special:
                     player_weapon.throw(target_x, target_y, player.x, player.y)
 
-            # SỰ KIỆN KÍCH HOẠT KỸ NĂNG ĐẶC BIỆT (CHUỘT PHẢI)
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3 and game_state == "PLAYING":
                 player_special.trigger(player.x, player.y)
 
         if not player.update_environment_logic(mode_name, WIDTH, HEIGHT):
             running = False
 
+        # --- XỬ LÝ ĐỘC PLAYER ---
+        if player_poison_time_left > 0:
+            if current_time - player_last_poison_tick >= 1000: # Rút 1 máu mỗi giây
+                player.health -= 1
+                player_last_poison_tick = current_time
+                player_poison_time_left -= 1
+                if player.health <= 0: running = False
+
         # 2. UPDATES
-        current_obstacles = [ent.rect for ent in active_endless_entities] if mode_name == 'ENDLESS' else all_obstacles
-        player.handle_movement(pygame.key.get_pressed(), current_obstacles, grasses, mode_name, WIDTH, HEIGHT)
+        if game_state == "PLAYING":
+            current_obstacles = [ent.rect for ent in active_endless_entities] if mode_name == 'ENDLESS' else all_obstacles
+            player.handle_movement(pygame.key.get_pressed(), current_obstacles, grasses, mode_name, WIDTH, HEIGHT)
+
+            # WAVE LOGIC & ENEMY SPAWNING
+            if len(enemies_to_spawn) > 0:
+                enemy_spawn_timer -= dt
+                if enemy_spawn_timer <= 0:
+                    cx, cy = (camera_x, camera_y) if mode_name == 'ENDLESS' else (0, 0)
+                    side = random.choice(['top', 'bottom', 'left', 'right'])
+                    if side == 'top':      sx, sy = random.randint(cx - 50, cx + WIDTH + 50), cy - 60
+                    elif side == 'bottom': sx, sy = random.randint(cx - 50, cx + WIDTH + 50), cy + HEIGHT + 60
+                    elif side == 'left':   sx, sy = cx - 60, random.randint(cy - 50, cy + HEIGHT + 50)
+                    else:                  sx, sy = cx + WIDTH + 60, random.randint(cy - 50, cy + HEIGHT + 50)
+                    
+                    e_type = enemies_to_spawn.pop()
+                    if e_type == 'big':
+                        active_enemies.append(EnemyNorBig(sx, sy, game_assets['nor_frames']))
+                    elif e_type == 'green':
+                        active_enemies.append(EnemyNorGreen(sx, sy, game_assets['nor_frames']))
+                    else:
+                        active_enemies.append(EnemyNor(sx, sy, game_assets['nor_frames']))
+                    
+                    enemy_spawn_timer = max(0.5, 2.0 - (current_wave * 0.1)) # Càng về sau ra quái càng lẹ
+            
+            # Check hết wave
+            elif len(enemies_to_spawn) == 0 and len(active_enemies) == 0:
+                current_wave += 1
+                if current_wave > max_waves:
+                    game_state = "WON"
+                else:
+                    game_state = "WAVE_TRANSITION"
+                    transition_timer = current_time
+                    enemies_to_spawn = get_wave_enemies(mode_name, current_wave)
+        
+        elif game_state == "WAVE_TRANSITION":
+            if current_time - transition_timer > 3000: # Nghỉ 3 giây giữa các Wave
+                game_state = "PLAYING"
 
         draw_player_x, draw_player_y = (WIDTH // 2, HEIGHT // 2) if mode_name == 'ENDLESS' else (int(player.x), int(player.y))
-
-        # Enemy Spawning & Logic
-        enemy_spawn_timer -= dt
-        if enemy_spawn_timer <= 0:
-            cx, cy = (camera_x, camera_y) if mode_name == 'ENDLESS' else (0, 0)
-            side = random.choice(['top', 'bottom', 'left', 'right'])
-            if side == 'top':      sx, sy = random.randint(cx - 50, cx + WIDTH + 50), cy - 60
-            elif side == 'bottom': sx, sy = random.randint(cx - 50, cx + WIDTH + 50), cy + HEIGHT + 60
-            elif side == 'left':   sx, sy = cx - 60, random.randint(cy - 50, cy + HEIGHT + 50)
-            else:                  sx, sy = cx + WIDTH + 60, random.randint(cy - 50, cy + HEIGHT + 50)
-            active_enemies.append(EnemyNor(sx, sy, game_assets['nor_frames']))
-            enemy_spawn_timer = 5.0 
         
         for enemy in active_enemies: 
-            enemy.update(player, dt, WIDTH, HEIGHT, mode_name)
+            enemy.update(player, dt, WIDTH, HEIGHT, mode_name, enemy_projectiles)
 
-        # Danger/Lava/Endless Logic
+        # Update đạn độc của quái
+        for proj in enemy_projectiles[:]:
+            if not proj.update():
+                enemy_projectiles.remove(proj)
+            elif math.hypot(player.x - proj.x, player.y - proj.y) < proj.radius + player.radius:
+                player.health -= 1 # Dame trực tiếp
+                player_poison_time_left = 3 # 3 giây độc
+                player_last_poison_tick = current_time
+                if proj in enemy_projectiles: enemy_projectiles.remove(proj)
+
         if mode_name == 'MEDIUM':
             danger_spawn_timer -= dt
             if danger_spawn_timer <= 0:
@@ -553,14 +623,8 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 elif is_on_screen(ent.x, ent.y, camera_x, camera_y, WIDTH, HEIGHT, buffer=0): ents_on_screen += 1
 
             if lavas_on_screen < 1: lava_spawn_timer -= dt
-            
             if ents_on_screen < 4 or (lavas_on_screen < 1 and lava_spawn_timer <= 0):
-                spawn_x, spawn_y = get_valid_spawn_pos(
-                    camera_x, camera_y, WIDTH, HEIGHT, 
-                    player.x, player.y, 
-                    active_endless_entities, active_lavas
-                )
-                
+                spawn_x, spawn_y = get_valid_spawn_pos(camera_x, camera_y, WIDTH, HEIGHT, player.x, player.y, active_endless_entities, active_lavas)
                 if lavas_on_screen < 1 and lava_spawn_timer <= 0:
                     active_lavas.append(LavaPool(spawn_x, spawn_y, game_assets['lava'], game_assets.get('lava_shadow')))
                     lava_spawn_timer = 8.0
@@ -572,9 +636,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             player.in_lava = player_in_lava
             player.update_lava_logic(dt)
 
-        # ---------------------------------------------------------
-        # UPDATE LOGIC VŨ KHÍ & CHẶN LỖI ĐỨNG HÌNH (FREEZE)
-        # ---------------------------------------------------------
         weapon_colliders = []
         if mode_name == 'ENDLESS':
             weapon_colliders.extend([ent.rect for ent in active_endless_entities])
@@ -583,37 +644,27 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             
         player_weapon.update(player.x, player.y, weapon_colliders)
         
-        # --- CƠ CHẾ XỬ LÝ VA CHẠM AN TOÀN TUYỆT ĐỐI VỚI VŨ KHÍ ---
         for enemy in active_enemies[:]:
-            # 1. Trường hợp: Vũ khí đang được ném đi
             if player_weapon.state == 'thrown' and player_weapon.rect.colliderect(enemy.rect):
-                enemy.take_damage(40) # Sát thương ném trúng
-                
-                # ÉP BUỘC VŨ KHÍ BIẾN MẤT VÀ NỔ, TUYỆT ĐỐI KHÔNG DÙNG STATE 'returning'
+                enemy.take_damage(40) 
                 player_weapon.state = 'disappeared'
-                player_weapon.action_time = pygame.time.get_ticks()
-                player_weapon.rect.center = (-9999, -9999) # Chuyển ra ngoài map để tránh va chạm kép
+                player_weapon.action_time = current_time
+                player_weapon.rect.center = (-9999, -9999) 
                 player_weapon.explosion = weapon.WeaponExplosion(player_weapon.x, player_weapon.y, weapon.SELECTED_WEAPON)
                 
-            # 2. Trường hợp: Súng đang bắn đạn
             elif player_weapon.state == 'shooting' and player_weapon.active_bullet:
-                # Tạo hitbox giả cho viên đạn
                 bullet_rect = pygame.Rect(0, 0, 10, 10)
                 bullet_rect.center = (int(player_weapon.active_bullet['x']), int(player_weapon.active_bullet['y']))
-                
                 if bullet_rect.colliderect(enemy.rect):
-                    enemy.take_damage(30) # Sát thương bắn súng
-                    
-                    # Cho đạn nổ và súng quay về trạng thái orbit bình thường
+                    enemy.take_damage(30) 
                     player_weapon.explosion = weapon.WeaponExplosion(player_weapon.active_bullet['x'], player_weapon.active_bullet['y'], 'gun')
                     player_weapon.active_bullet = None
                     player_weapon.state = 'orbit'
                     
-            # 3. Lọc bỏ quái chết khỏi danh sách
             if enemy.health <= 0 and enemy in active_enemies:
+                score.game_score.add_points(enemy.score_value) 
                 active_enemies.remove(enemy)
 
-        # UPDATE LOGIC KỸ NĂNG ĐẶC BIỆT
         player_special.update(player.x, player.y, active_enemies)
 
         # 3. DRAWING
@@ -623,25 +674,18 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 for x in range(int(-(camera_x % bg_w)) - bg_w, WIDTH + bg_w, bg_w):
                     for y in range(int(-(camera_y % bg_h)) - bg_h, HEIGHT + bg_h, bg_h):
                         screen.blit(bg_img, (x, y))
-            else:
-                screen.blit(game_assets[ground_key], (0, 0))
-        else:
-            screen.fill({'EASY': (60, 75, 65), 'MEDIUM': (75, 65, 50), 'HARD': (45, 40, 50), 'ENDLESS': (70, 30, 30)}.get(mode_name, (50, 50, 50)))
+            else: screen.blit(game_assets[ground_key], (0, 0))
+        else: screen.fill({'EASY': (60, 75, 65), 'MEDIUM': (75, 65, 50), 'HARD': (45, 40, 50), 'ENDLESS': (70, 30, 30)}.get(mode_name, (50, 50, 50)))
             
-        # Draw Entities
         if mode_name in ['EASY', 'MEDIUM', 'HARD']:
             all_rects = dirts + rocks + grasses + trees
             all_keys = ['dirt']*len(dirts) + ['rock']*len(rocks) + ['grass']*len(grasses) + ['tree']*len(trees)
-            
             for obs, key in zip(all_rects, all_keys):
                 shadow_key = f'{key}_shadow'
                 if game_assets.get(shadow_key):
                     sh_img = game_assets[shadow_key]
-                    sh_rect = sh_img.get_rect(center=(obs.centerx, obs.bottom - 2))
-                    screen.blit(sh_img, sh_rect)
-                
-            for obs, key in zip(all_rects, all_keys):
-                screen.blit(game_assets[key], obs.topleft)
+                    screen.blit(sh_img, sh_img.get_rect(center=(obs.centerx, obs.bottom - 2)))
+            for obs, key in zip(all_rects, all_keys): screen.blit(game_assets[key], obs.topleft)
                 
         if mode_name == 'MEDIUM':
             for danger in active_dangers: danger.draw(screen, camera_x, camera_y)
@@ -651,25 +695,42 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             for ent in active_endless_entities: ent.draw_shadow(screen, camera_x, camera_y)
             for ent in active_endless_entities: ent.draw(screen, camera_x, camera_y)
 
-        # Draw Characters (Vẽ quái có kèm thanh máu pixel và Player)
         for enemy in active_enemies: enemy.draw(screen, camera_x, camera_y)
+        for proj in enemy_projectiles: proj.draw(screen, camera_x, camera_y)
+
         player.draw(screen, draw_player_x, draw_player_y, game_assets['font_level_diff'])
-        
-        # VẼ VŨ KHÍ VÀ KỸ NĂNG ĐẶC BIỆT LÊN MÀN HÌNH
+        if player_poison_time_left > 0 and (current_time // 100) % 2 == 0:
+            poison_flash = pygame.Surface((player.radius * 2.5, player.radius * 2.5), pygame.SRCALPHA)
+            pygame.draw.circle(poison_flash, (0, 255, 0, 100), (player.radius*1.25, player.radius*1.25), player.radius*1.25)
+            screen.blit(poison_flash, (draw_player_x - player.radius*1.25, draw_player_y - player.radius*1.25))
+
         player_weapon.draw(screen, camera_x, camera_y)
         player_special.draw(screen, camera_x, camera_y)
         
-        # Draw Overlays
-        if mode_name == 'ENDLESS' and player_in_lava and (pygame.time.get_ticks() // 100) % 2 == 0:  
+        if mode_name == 'ENDLESS' and player_in_lava and (current_time // 100) % 2 == 0:  
             orange_flash = pygame.Surface((player.radius * 2, player.radius * 2), pygame.SRCALPHA)
             pygame.draw.circle(orange_flash, (255, 110, 0, 150), (player.radius, player.radius), player.radius)
             screen.blit(orange_flash, (draw_player_x - player.radius, draw_player_y - player.radius))
         
         draw_health_bar(screen, 20, 20, player.health, player.max_health, game_assets['font_level_diff'])
+        score.game_score.draw_in_game(screen, game_assets['font_level_diff'], 20, 60)
+        
+        # --- UI WAVE ---
+        if game_state == "WAVE_TRANSITION":
+            draw_text_with_shadow(f"WAVE {current_wave} APPROACHING", game_assets['font_level_title'], (255, 100, 100), screen, WIDTH // 2, HEIGHT // 2)
+        elif game_state == "WON":
+            draw_text_with_shadow(f"YOU WIN!", game_assets['font_title'], (255, 215, 0), screen, WIDTH // 2, HEIGHT // 2 - 30)
+            draw_text_with_shadow(f"PRESS ESC TO RETURN", game_assets['font_level_txt'], WHITE, screen, WIDTH // 2, HEIGHT // 2 + 30)
+        else:
+            wave_text = f"WAVE {current_wave}/{max_waves}" if mode_name != 'ENDLESS' else f"WAVE {current_wave} (ENDLESS)"
+            draw_text_with_shadow(wave_text, game_assets['font_level_diff'], (200, 200, 255), screen, WIDTH - 80, 30)
+            draw_text_with_shadow(f"Enemies Left: {len(active_enemies) + len(enemies_to_spawn)}", game_assets['font_level_diff'], WHITE, screen, WIDTH - 80, 60)
+
         if mode_name == 'HARD' and player.water_timer > 0: 
             draw_text_with_shadow(f"OXYGEN: {max(0, int(15.0 - player.water_timer))}s", game_assets['font_level_diff'], (100, 200, 255), screen, WIDTH // 2, 30)
         draw_text_with_shadow(f"{mode_name} MODE - PRESS ESC TO RETURN", game_assets['font_level_diff'], (220, 220, 220), screen, WIDTH // 2, HEIGHT - 25)
         
         pygame.display.update()
 
+    score.game_score.save_high_score()
     transition_func(clock)
