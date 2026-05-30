@@ -272,7 +272,6 @@ class EnemyNorBig(EnemyNor):
             pygame.draw.rect(screen, (50, 15, 15), (bx, by, 40, 4))
             pygame.draw.rect(screen, (60, 230, 60), (bx, by, max(0, int(40 * (self.health / self.max_health))), 4))
 
-
 class EnemyNorGreen(EnemyNor):
     def __init__(self, x, y, frames, wave=1):
         super().__init__(x, y, frames, wave)
@@ -484,7 +483,6 @@ class KaboomExplosion:
     def __init__(self, x, y, level):
         self.x, self.y = x, y
         self.radius = 5
-        # Cập nhật bán kính dựa trên cấp độ: Level 3 là toàn Map
         if level >= 3:
             self.max_radius = 999999
         else:
@@ -500,18 +498,16 @@ class KaboomExplosion:
         if self.radius >= self.max_radius * 0.6 and not self.has_dealt_damage:
             self.has_dealt_damage = True
             for e in enemies:
-                # Nếu max_radius = 999999 thì mặc định trúng toàn bộ map
                 dist = math.hypot(e.x - self.x, e.y - self.y)
                 if self.max_radius >= 999999 or dist < self.max_radius:
                     e.take_damage(self.damage)
-                    if dist > 0 and self.max_radius < 999999: # Chỉ đẩy lùi nếu không phải level max map
+                    if dist > 0 and self.max_radius < 999999:
                         e.x += ((e.x - self.x) / dist) * 40
                         e.y += ((e.y - self.y) / dist) * 40
 
     def draw(self, screen, camera_x, camera_y):
         if self.life > 0:
             if self.max_radius >= 999999:
-                # Hiệu ứng nổ rực sáng toàn màn hình
                 overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
                 overlay.fill((255, 200, 50, max(0, int(self.life * 0.4))))
                 screen.blit(overlay, (0, 0))
@@ -576,7 +572,6 @@ BUFF_DESCS = {
     'magic': "Magic orbs orbit & slow enemies"
 }
 
-# --- SMOOTH BUFF CARD UI ---
 def draw_buff_card(screen, font, title, desc, rect, is_hover, level, buff_images):
     card_rect = rect.inflate(10, 10) if is_hover else rect
     shape_surf = pygame.Surface(card_rect.size, pygame.SRCALPHA)
@@ -779,24 +774,30 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
     pygame.mixer.init()
     if 'sfx' not in game_assets:
         game_assets['sfx'] = {}
-        # Đã thêm buffsound vào danh sách load âm thanh tự động
-        sfx_list = ['axesound', 'bombsound', 'flowersound', 'gunsound', 'swordsound', 'wrenchsound', 'hit', 'explosion', 'lose', 'winsound', 'win', 'buffsound']
+        # Đã thêm tanksound vào danh sách tải âm thanh
+        sfx_list = ['axesound', 'bombsound', 'flowersound', 'gunsound', 'swordsound', 'wrenchsound', 'hit', 'explosion', 'lose', 'winsound', 'win', 'buffsound', 'tanksound']
         for sfx in sfx_list:
             path = os.path.join('sound', f"{sfx}.mp3")
             if os.path.exists(path):
                 try: game_assets['sfx'][sfx] = pygame.mixer.Sound(path)
                 except: pass
+            else:
+                # Đề phòng bạn dùng đuôi wav
+                path_wav = os.path.join('sound', f"{sfx}.wav")
+                if os.path.exists(path_wav):
+                    try: game_assets['sfx'][sfx] = pygame.mixer.Sound(path_wav)
+                    except: pass
 
     def play_cached_sfx(name):
-        """Hàm hỗ trợ phát âm thanh một cách an toàn"""
         if 'sfx' in game_assets and name in game_assets['sfx']:
             game_assets['sfx'][name].play()
-        # Fallback nếu không có file name cụ thể
         elif name in ['winsound', 'win']:
             if 'win' in game_assets.get('sfx', {}): game_assets['sfx']['win'].play()
             elif 'winsound' in game_assets.get('sfx', {}): game_assets['sfx']['winsound'].play()
+            
+    # Lưu hàm phát âm thanh vào game_assets để các file khác (như special.py) cũng có thể gọi
+    game_assets['play_sfx'] = play_cached_sfx
 
-    # Bắt đầu phát nhạc nền (battle theme) tự động lặp lại
     try:
         pygame.mixer.music.load(os.path.join('sound', 'battletheme.mp3'))
         pygame.mixer.music.set_volume(0.6)
@@ -912,6 +913,8 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                             required_throws = max(2, 6 - player_buffs['kaboom'])
                             if kaboom_throws >= required_throws:
                                 kaboom_throws = 0
+                                # --- PHÁT ÂM THANH KABOOM NỔ BẰNG TANKSOUND ---
+                                play_cached_sfx('tanksound')
                                 kaboom_explosions.append(KaboomExplosion(player.x, player.y, player_buffs['kaboom']))
 
                 elif game_state == "CHOOSING_BUFF":
@@ -1172,7 +1175,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         pw.explosion = weapon.WeaponExplosion(pw.active_bullet['x'], pw.active_bullet['y'], 'gun')
                         pw.active_bullet = None
                         pw.state = 'orbit'
-                        play_cached_sfx('hit')
                         
                 if is_dead or enemy.health <= 0:
                     if enemy.type == 'orange':
@@ -1294,7 +1296,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 draw_buff_card(screen, game_assets['font_level_diff'], buff_name, BUFF_DESCS[buff_name], rect, rect.collidepoint(mx, my), player_buffs[buff_name], buff_images)
                 
                 if click_x != -1 and rect.collidepoint(click_x, click_y):
-                    # --- GỌI ÂM THANH KHI CHỌN BUFF ---
                     play_cached_sfx('buffsound')
                     
                     if player_buffs[buff_name] < 3: player_buffs[buff_name] += 1
