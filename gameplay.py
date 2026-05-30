@@ -130,8 +130,74 @@ class EndlessEntity:
     def draw(self, screen, camera_x, camera_y):
         screen.blit(self.image, self.image.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y))))
 
+
 # ==========================================
-# QUÁI VẬT & HIỆU ỨNG TỪ QUÁI
+# CÁC DẠNG ĐẠN/VŨ KHÍ QUÁI VẬT
+# ==========================================
+class PoisonBullet:
+    def __init__(self, x, y, target_x, target_y):
+        self.x, self.y = x, y
+        dx, dy = target_x - x, target_y - y
+        dist = math.hypot(dx, dy)
+        speed = 8.0
+        self.vx = (dx / dist) * speed if dist > 0 else speed
+        self.vy = (dy / dist) * speed if dist > 0 else 0
+        self.radius, self.life = 8, 100
+
+    def update(self):
+        self.x += self.vx
+        self.y += self.vy
+        self.life -= 1
+        return self.life > 0
+
+    def draw(self, screen, camera_x, camera_y):
+        pygame.draw.circle(screen, (50, 255, 50), (int(self.x - camera_x), int(self.y - camera_y)), self.radius)
+        pygame.draw.circle(screen, (200, 255, 200), (int(self.x - camera_x), int(self.y - camera_y)), self.radius // 2)
+
+class ChainProjectile:
+    def __init__(self, x, y, target_x, target_y, owner):
+        self.x, self.y = x, y
+        self.owner = owner
+        self.is_chain = True
+        dx, dy = target_x - x, target_y - y
+        dist = math.hypot(dx, dy)
+        self.vx = (dx / dist) * 15 if dist > 0 else 0
+        self.vy = (dy / dist) * 15 if dist > 0 else 0
+        self.radius, self.life = 8, 45
+
+    def update(self):
+        self.x += self.vx
+        self.y += self.vy
+        self.life -= 1
+        return self.life > 0
+
+    def draw(self, screen, camera_x, camera_y):
+        pygame.draw.line(screen, (130, 130, 130), (int(self.owner.x - camera_x), int(self.owner.y - camera_y)), (int(self.x - camera_x), int(self.y - camera_y)), 5)
+        pygame.draw.circle(screen, (180, 180, 180), (int(self.x - camera_x), int(self.y - camera_y)), self.radius)
+
+class CannonballProjectile:
+    def __init__(self, x, y, target_x, target_y):
+        self.x, self.y = x, y
+        self.is_cannon = True
+        dx, dy = target_x - x, target_y - y
+        dist = math.hypot(dx, dy)
+        self.vx = (dx / dist) * 4.5 if dist > 0 else 0
+        self.vy = (dy / dist) * 4.5 if dist > 0 else 0
+        self.radius, self.life = 14, 120
+
+    def update(self):
+        self.x += self.vx
+        self.y += self.vy
+        self.life -= 1
+        return self.life > 0
+
+    def draw(self, screen, camera_x, camera_y):
+        pygame.draw.circle(screen, (40, 40, 40), (int(self.x - camera_x), int(self.y - camera_y)), self.radius)
+        pygame.draw.circle(screen, (255, 100, 0), (int(self.x - camera_x), int(self.y - camera_y)), self.radius // 2)
+
+
+# ==========================================
+# QUÁI VẬT
 # ==========================================
 class EnemyNor:
     def __init__(self, x, y, frames, wave=1):
@@ -153,7 +219,7 @@ class EnemyNor:
         self.health = max(0, self.health - amount)
         return self.health <= 0 
 
-    def update(self, player, dt, width, height, mode_name, player_shield, active_projectiles):
+    def update(self, player, dt, width, height, mode_name, player_shield, active_projectiles, all_obstacles=None):
         dx, dy = player.x - self.x, player.y - self.y
         dist = math.hypot(dx, dy)
         if dist > 0:
@@ -206,25 +272,6 @@ class EnemyNorBig(EnemyNor):
             pygame.draw.rect(screen, (50, 15, 15), (bx, by, 40, 4))
             pygame.draw.rect(screen, (60, 230, 60), (bx, by, max(0, int(40 * (self.health / self.max_health))), 4))
 
-class PoisonBullet:
-    def __init__(self, x, y, target_x, target_y):
-        self.x, self.y = x, y
-        dx, dy = target_x - x, target_y - y
-        dist = math.hypot(dx, dy)
-        speed = 8.0
-        self.vx = (dx / dist) * speed if dist > 0 else speed
-        self.vy = (dy / dist) * speed if dist > 0 else 0
-        self.radius, self.life = 8, 100
-
-    def update(self):
-        self.x += self.vx
-        self.y += self.vy
-        self.life -= 1
-        return self.life > 0
-
-    def draw(self, screen, camera_x, camera_y):
-        pygame.draw.circle(screen, (50, 255, 50), (int(self.x - camera_x), int(self.y - camera_y)), self.radius)
-        pygame.draw.circle(screen, (200, 255, 200), (int(self.x - camera_x), int(self.y - camera_y)), self.radius // 2)
 
 class EnemyNorGreen(EnemyNor):
     def __init__(self, x, y, frames, wave=1):
@@ -246,7 +293,7 @@ class EnemyNorGreen(EnemyNor):
             colored_frames.append(new_f)
         self.frames = colored_frames
 
-    def update(self, player, dt, width, height, mode_name, player_shield, active_projectiles):
+    def update(self, player, dt, width, height, mode_name, player_shield, active_projectiles, all_obstacles=None):
         dx, dy = player.x - self.x, player.y - self.y
         dist = math.hypot(dx, dy)
         self.angle = math.degrees(math.atan2(-dy, dx))
@@ -266,7 +313,6 @@ class EnemyNorGreen(EnemyNor):
 
         if dist < 400 and current_time - self.last_shot_time > self.fire_rate:
             active_projectiles.append(PoisonBullet(self.x, self.y, player.x, player.y))
-            
             if self.wave >= 5:
                 angle_rad = math.atan2(player.y - self.y, player.x - self.x)
                 spread_angle = 0.25 
@@ -299,6 +345,117 @@ class EnemyNorOrange(EnemyNor):
             new_f.blit(tint, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
             colored_frames.append(new_f)
         self.frames = colored_frames
+
+class EnemySpec(EnemyNor):
+    def __init__(self, x, y, frames, wave=1):
+        super().__init__(x, y, frames, wave)
+        self.type = 'spec'
+        stat_mult = 1.0 + max(0, (wave - 3) // 2) * 0.20 if wave >= 5 else 1.0
+        self.max_health = int(130 * stat_mult) 
+        self.health = self.max_health
+        self.speed = 30 * stat_mult
+        self.score_value = 25
+        self.chain_cooldown = 4000
+        self.last_chain_time = pygame.time.get_ticks()
+
+    def update(self, player, dt, width, height, mode_name, player_shield, active_projectiles, all_obstacles=None):
+        dx, dy = player.x - self.x, player.y - self.y
+        dist = math.hypot(dx, dy)
+        if dist > 0:
+            self.x += (dx / dist) * self.speed * dt
+            self.y += (dy / dist) * self.speed * dt
+            self.angle = math.degrees(math.atan2(-dy, dx)) 
+        self.rect.center = (int(self.x), int(self.y))
+        
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_frame_time > self.frame_rate:
+            if self.frames: self.frame_index = (self.frame_index + 1) % len(self.frames)
+            self.last_frame_time = current_time
+
+        if dist < 450 and current_time - self.last_chain_time > self.chain_cooldown:
+            active_projectiles.append(ChainProjectile(self.x, self.y, player.x, player.y, self))
+            self.last_chain_time = current_time
+
+        if dist < self.radius + player.radius:
+            if current_time - self.last_damage_time > self.damage_cooldown:
+                self.last_damage_time = current_time
+                return self.base_damage
+        return 0
+
+class EnemyShip:
+    def __init__(self, x, y, image, wave=1):
+        self.x, self.y = float(x), float(y)
+        self.type = 'ship'
+        # Dùng ảnh tĩnh thường, không phải flipbook
+        self.image = pygame.transform.scale(image, (80, 80))
+        
+        stat_mult = 1.0 + max(0, (wave - 3) // 2) * 0.20 if wave >= 5 else 1.0
+        self.max_health = int(300 * stat_mult) 
+        self.health = self.max_health
+        self.speed = 20 * stat_mult 
+        self.score_value = 40
+        self.fire_rate = 3500
+        self.last_shot_time = pygame.time.get_ticks()
+        
+        self.radius = 30
+        self.angle = 0
+        self.rect = pygame.Rect(0, 0, 80, 80)
+        self.damage_cooldown = 1000
+        self.last_damage_time = 0
+        self.base_damage = int(15 * stat_mult)
+
+    def take_damage(self, amount):
+        self.health -= amount
+        return self.health <= 0
+
+    def update(self, player, dt, width, height, mode_name, player_shield, active_projectiles, all_obstacles=None):
+        dx, dy = player.x - self.x, player.y - self.y
+        dist = math.hypot(dx, dy)
+        
+        if dist > 0:
+            nx = self.x + (dx / dist) * self.speed * dt
+            ny = self.y + (dy / dist) * self.speed * dt
+            
+            dummy_rect = self.rect.copy()
+            dummy_rect.center = (int(nx), int(ny))
+            hit_obstacle = False
+            if all_obstacles:
+                hit_obstacle = any(dummy_rect.colliderect(obs) for obs in all_obstacles)
+                
+            # LOGIC BIỂN: Thuyền chỉ di chuyển BÊN TRONG MÀN HÌNH (Biển) và tránh chạm vật cản
+            if not hit_obstacle and dist > 150:
+                if 40 < nx < width - 40 and 40 < ny < height - 40:
+                    self.x = nx
+                    self.y = ny
+            
+            self.angle = math.degrees(math.atan2(-dy, dx))
+            
+        self.rect.center = (int(self.x), int(self.y))
+        
+        current_time = pygame.time.get_ticks()
+
+        # Pháo nổ AoE
+        if dist < 650 and current_time - self.last_shot_time > self.fire_rate:
+            active_projectiles.append(CannonballProjectile(self.x, self.y, player.x, player.y))
+            self.last_shot_time = current_time
+            
+        if dist < self.radius + player.radius:
+            if current_time - self.last_damage_time > self.damage_cooldown:
+                self.last_damage_time = current_time
+                return self.base_damage
+        return 0
+
+    def draw(self, screen, camera_x, camera_y):
+        draw_x, draw_y = int(self.x - camera_x), int(self.y - camera_y)
+        rotated_img = pygame.transform.rotate(self.image, self.angle)
+        screen.blit(rotated_img, rotated_img.get_rect(center=(draw_x, draw_y)))
+        
+        if self.health < self.max_health and self.health > 0: 
+            bx, by = draw_x - 15, draw_y - 40
+            pygame.draw.rect(screen, (0, 0, 0), (bx - 1, by - 1, 32, 6))
+            pygame.draw.rect(screen, (50, 15, 15), (bx, by, 30, 4))
+            pygame.draw.rect(screen, (60, 230, 60), (bx, by, max(0, int(30 * (self.health / self.max_health))), 4))
+
 
 # ----------------- SMOOTH EXPLOSIONS -----------------
 class OrangeExplosion:
@@ -402,7 +559,10 @@ def get_wave_enemies(mode_name, wave_num):
     big_count = int((wave_num // 3) * 1.2 * multiplier)   
     orange_count = int((wave_num // 2) * 2 * multiplier) 
     
-    enemies_list = ['normal'] * normal_count + ['green'] * green_count + ['big'] * big_count + ['orange'] * orange_count
+    spec_count = int((wave_num // 2) * 1.5 * multiplier) if mode_name in ['MEDIUM', 'ENDLESS'] else 0
+    ship_count = int((wave_num // 2) * 1.2 * multiplier) if mode_name == 'HARD' else 0
+    
+    enemies_list = ['normal'] * normal_count + ['green'] * green_count + ['big'] * big_count + ['orange'] * orange_count + ['spec'] * spec_count + ['ship'] * ship_count
     random.shuffle(enemies_list)
     return enemies_list
 
@@ -562,6 +722,33 @@ def load_game_entities(game_assets):
                 nor_frames.append(dummy)
         game_assets['nor_frames'] = nor_frames
         
+    if 'spec_frames' not in game_assets:
+        path = os.path.join('opp', 'spec.png')
+        frames = []
+        if os.path.exists(path):
+            sheet = pygame.image.load(path).convert_alpha()
+            fw, fh = sheet.get_width() // 3, sheet.get_height() // 3
+            for row in range(3):
+                for col in range(3):
+                    rect = pygame.Rect(col * fw, row * fh, fw, fh)
+                    frames.append(pygame.transform.smoothscale(sheet.subsurface(rect), (60, 60)))
+        else:
+            for _ in range(9):
+                dummy = pygame.Surface((60, 60), pygame.SRCALPHA)
+                pygame.draw.circle(dummy, (150, 150, 150), (30, 30), 30)
+                frames.append(dummy)
+        game_assets['spec_frames'] = frames
+
+    # Ảnh Ship (Tĩnh, không flipbook)
+    if 'ship_img' not in game_assets:
+        path = os.path.join('opp', 'ship.png')
+        if os.path.exists(path):
+            game_assets['ship_img'] = pygame.image.load(path).convert_alpha()
+        else:
+            dummy = pygame.Surface((80, 80), pygame.SRCALPHA)
+            pygame.draw.polygon(dummy, (80, 80, 120), [(40,0), (80,40), (40,80), (0,40)])
+            game_assets['ship_img'] = dummy
+
     new_entities = {
         'driedtree': {'fb_col': (70,50,40), 'fb_size': (45,65), 'shadow': True, 's_alpha': 20},
         'bone':      {'fb_col': (220,220,200), 'fb_size': (25,12), 'shadow': False},
@@ -611,8 +798,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
 
     all_obstacles = dirts + rocks + trees
     player = Player(WIDTH // 2, HEIGHT // 2)
-    
-    # Kế thừa level cho các logic buff cao cấp trong class WeaponEntity
     player.kaboom_level = 0
     
     def get_weapon_image():
@@ -713,8 +898,9 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 player_poison_time_left -= 1
                 if player.health <= 0: running = False
 
+        current_obstacles = [ent.rect for ent in active_endless_entities] if mode_name == 'ENDLESS' else all_obstacles
+
         if game_state == "PLAYING":
-            current_obstacles = [ent.rect for ent in active_endless_entities] if mode_name == 'ENDLESS' else all_obstacles
             player.handle_movement(pygame.key.get_pressed(), current_obstacles, grasses, mode_name, WIDTH, HEIGHT)
 
             target_weapon_count = 1 + player_buffs['x2']
@@ -731,16 +917,37 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 enemy_spawn_timer -= dt
                 if enemy_spawn_timer <= 0:
                     cx, cy = (camera_x, camera_y) if mode_name == 'ENDLESS' else (0, 0)
-                    side = random.choice(['top', 'bottom', 'left', 'right'])
-                    if side == 'top':      sx, sy = random.randint(cx - 50, cx + WIDTH + 50), cy - 60
-                    elif side == 'bottom': sx, sy = random.randint(cx - 50, cx + WIDTH + 50), cy + HEIGHT + 60
-                    elif side == 'left':   sx, sy = cx - 60, random.randint(cy - 50, cy + HEIGHT + 50)
-                    else:                  sx, sy = cx + WIDTH + 60, random.randint(cy - 50, cy + HEIGHT + 50)
-                    
                     e_type = enemies_to_spawn.pop()
+                    
+                    # LOGIC SPAWN ĐẶC BIỆT CHO QUÁI SHIP: Chỉ spawn TRONG MÀN HÌNH (Biển) và tránh vật cản (Đá/Cây)
+                    sx, sy = 0, 0
+                    if e_type == 'ship':
+                        for _ in range(50):
+                            # Spawn ngẫu nhiên bên trong màn hình
+                            sx = random.randint(cx + 40, cx + WIDTH - 40)
+                            sy = random.randint(cy + 40, cy + HEIGHT - 40)
+                            
+                            # Tránh spawn quá gần người chơi (bất ngờ)
+                            if math.hypot(sx - player.x, sy - player.y) < 250:
+                                continue
+                                
+                            dummy_rect = pygame.Rect(0, 0, 80, 80)
+                            dummy_rect.center = (sx, sy)
+                            if not any(dummy_rect.colliderect(obs) for obs in current_obstacles):
+                                break
+                    else:
+                        # Các quái vật bình thường khác tiếp tục spawn từ NGUÀI RÌA (Trên cạn) đi vào
+                        side = random.choice(['top', 'bottom', 'left', 'right'])
+                        if side == 'top':      sx, sy = random.randint(cx - 50, cx + WIDTH + 50), cy - 60
+                        elif side == 'bottom': sx, sy = random.randint(cx - 50, cx + WIDTH + 50), cy + HEIGHT + 60
+                        elif side == 'left':   sx, sy = cx - 60, random.randint(cy - 50, cy + HEIGHT + 50)
+                        else:                  sx, sy = cx + WIDTH + 60, random.randint(cy - 50, cy + HEIGHT + 50)
+                    
                     if e_type == 'big': active_enemies.append(EnemyNorBig(sx, sy, game_assets['nor_frames'], wave=current_wave))
                     elif e_type == 'green': active_enemies.append(EnemyNorGreen(sx, sy, game_assets['nor_frames'], wave=current_wave))
                     elif e_type == 'orange': active_enemies.append(EnemyNorOrange(sx, sy, game_assets['nor_frames'], wave=current_wave))
+                    elif e_type == 'spec': active_enemies.append(EnemySpec(sx, sy, game_assets['spec_frames'], wave=current_wave))
+                    elif e_type == 'ship': active_enemies.append(EnemyShip(sx, sy, game_assets['ship_img'], wave=current_wave))
                     else: active_enemies.append(EnemyNor(sx, sy, game_assets['nor_frames'], wave=current_wave))
                     
                     enemy_spawn_timer = max(0.2, 1.0 - (current_wave * 0.05))
@@ -761,7 +968,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         draw_player_x, draw_player_y = (WIDTH // 2, HEIGHT // 2) if mode_name == 'ENDLESS' else (int(player.x), int(player.y))
         
         for enemy in active_enemies: 
-            dmg_taken = enemy.update(player, dt, WIDTH, HEIGHT, mode_name, player_buffs['shield'], enemy_projectiles)
+            dmg_taken = enemy.update(player, dt, WIDTH, HEIGHT, mode_name, player_buffs['shield'], enemy_projectiles, current_obstacles)
             if dmg_taken > 0:
                 if shield_hp > 0: shield_hp -= dmg_taken
                 else: 
@@ -769,16 +976,35 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     if player.health <= 0: running = False
 
         for proj in enemy_projectiles[:]:
-            if not proj.update(): enemy_projectiles.remove(proj)
-            elif math.hypot(player.x - proj.x, player.y - proj.y) < proj.radius + player.radius:
-                dmg = 1
-                if shield_hp > 0: shield_hp -= dmg
-                else: 
-                    player.health -= dmg
-                    if player.health <= 0: running = False
-                player_poison_time_left = 3
-                player_last_poison_tick = current_time
-                if proj in enemy_projectiles: enemy_projectiles.remove(proj)
+            if getattr(proj, 'is_chain', False):
+                if not proj.update():
+                    enemy_projectiles.remove(proj)
+                elif math.hypot(player.x - proj.x, player.y - proj.y) < proj.radius + player.radius:
+                    pull_dx, pull_dy = proj.owner.x - player.x, proj.owner.y - player.y
+                    p_dist = math.hypot(pull_dx, pull_dy)
+                    if p_dist > 50:
+                        player.x += (pull_dx/p_dist) * 150 
+                        player.y += (pull_dy/p_dist) * 150
+                    if proj in enemy_projectiles: enemy_projectiles.remove(proj)
+                    
+            elif getattr(proj, 'is_cannon', False):
+                if not proj.update():
+                    orange_explosions.append(OrangeExplosion(proj.x, proj.y, current_wave))
+                    if proj in enemy_projectiles: enemy_projectiles.remove(proj)
+                elif math.hypot(player.x - proj.x, player.y - proj.y) < proj.radius + player.radius:
+                    orange_explosions.append(OrangeExplosion(proj.x, proj.y, current_wave))
+                    if proj in enemy_projectiles: enemy_projectiles.remove(proj)
+            else:
+                if not proj.update(): enemy_projectiles.remove(proj)
+                elif math.hypot(player.x - proj.x, player.y - proj.y) < proj.radius + player.radius:
+                    dmg = 1
+                    if shield_hp > 0: shield_hp -= dmg
+                    else: 
+                        player.health -= dmg
+                        if player.health <= 0: running = False
+                    player_poison_time_left = 3
+                    player_last_poison_tick = current_time
+                    if proj in enemy_projectiles: enemy_projectiles.remove(proj)
 
         if mode_name == 'MEDIUM':
             if game_state == "PLAYING":
@@ -830,12 +1056,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             player.in_lava = player_in_lava
             player.update_lava_logic(dt)
 
-        weapon_colliders = []
-        if mode_name == 'ENDLESS':
-            weapon_colliders.extend([ent.rect for ent in active_endless_entities])
-        else:
-            weapon_colliders.extend(all_obstacles)
-            
+        weapon_colliders = current_obstacles
         damage_multiplier = 1.0 + (0.3 * player_buffs['dame'])
         
         for pw in player_weapons:
@@ -848,7 +1069,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             if pw.state != 'thrown':
                 pw.hit_targets.clear()
             
-            # --- XỬ LÝ NẾU NÉM TRƯỢT ---
             if was_thrown and pw.state != 'thrown' and weapon.SELECTED_WEAPON != 'sword':
                 pw.explosion = weapon.WeaponExplosion(pw.x, pw.y, weapon.SELECTED_WEAPON)
                 
@@ -859,9 +1079,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                             
                 elif weapon.SELECTED_WEAPON in ['bomb', 'bomb1', 'bomb2']:
                     for other_enemy in active_enemies:
-                        # TĂNG AOE BOM X1.5 LẦN
                         if math.hypot(other_enemy.x - pw.x, other_enemy.y - pw.y) < 150: 
-                            # TĂNG DAME AOE BOM X2.5 LẦN
                             other_enemy.take_damage(87 * damage_multiplier) 
                     
                     if getattr(pw, 'is_toxic', False): 
@@ -873,7 +1091,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     if len(player_special.active_tanks) < max_tanks:
                         player_special.active_tanks.append(special.TankEntity(pw.x, pw.y, player_special))
 
-            # --- XỬ LÝ NẾU VŨ KHÍ TRÚNG QUÁI TRỰC TIẾP ---
             for enemy in active_enemies[:]:
                 is_dead = False
                 
@@ -882,7 +1099,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     if weapon.SELECTED_WEAPON == 'sword':
                         base_dmg = 75
                     elif weapon.SELECTED_WEAPON in ['bomb', 'bomb1', 'bomb2']:
-                        base_dmg = 100 # TĂNG DAME TRỰC TIẾP BOM X2.5 LẦN
+                        base_dmg = 100
                         
                     is_dead = enemy.take_damage(base_dmg * damage_multiplier) 
                     
@@ -901,9 +1118,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                                     
                         elif weapon.SELECTED_WEAPON in ['bomb', 'bomb1', 'bomb2']:
                             for other_enemy in active_enemies:
-                                # TĂNG AOE BOM X1.5 LẦN
                                 if other_enemy != enemy and math.hypot(other_enemy.x - pw.x, other_enemy.y - pw.y) < 150:
-                                    # TĂNG DAME AOE BOM X2.5 LẦN
                                     other_enemy.take_damage(87 * damage_multiplier)
                         
                         if weapon.SELECTED_WEAPON == 'wrench':

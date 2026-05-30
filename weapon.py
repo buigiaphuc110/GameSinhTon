@@ -714,19 +714,50 @@ def weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_
     
     if SELECTED_WEAPON not in weapon_names and weapon_names:
         SELECTED_WEAPON = weapon_names[0]
+        
+    # --- LOAD ẢNH BACKGROUND CUỘN ---
+    bg_image = None
+    for ext in ['.png', '.jpg', '.jpeg', '.PNG', '.JPG']:
+        if os.path.exists('background5' + ext):
+            bg_image = pygame.image.load('background5' + ext).convert()
+            bg_image = pygame.transform.scale(bg_image, (WIDTH, HEIGHT))
+            break
+            
+    bg_x = 0
     
-    BOX_SIZE, GAP = 120, 40
-    start_x = (WIDTH - (len(weapon_names) * BOX_SIZE + (len(weapon_names) - 1) * GAP)) // 2
+    # --- CHIA LƯỚI GRID ---
+    BOX_SIZE, GAP = 120, 30
+    cols = 4 if len(weapon_names) >= 4 else len(weapon_names) # Tối đa 4 cột
+    if cols == 0: cols = 1
+    rows = math.ceil(len(weapon_names) / cols)
+    
+    total_w = cols * BOX_SIZE + (cols - 1) * GAP
+    total_h = rows * BOX_SIZE + (rows - 1) * GAP
+    
+    start_x = (WIDTH - total_w) // 2
+    start_y = (HEIGHT - total_h) // 2 + 20 
     
     boxes = []
     for i, name in enumerate(weapon_names):
-        rect = pygame.Rect(start_x + i * (BOX_SIZE + GAP), HEIGHT // 2 - BOX_SIZE // 2, BOX_SIZE, BOX_SIZE)
+        col = i % cols
+        row = i // cols
+        rect = pygame.Rect(start_x + col * (BOX_SIZE + GAP), start_y + row * (BOX_SIZE + GAP), BOX_SIZE, BOX_SIZE)
         boxes.append((rect, name))
 
     btn_back = pygame.Rect(20, 20, 70, 45)
 
-    def draw_screen(mx, my):
-        screen.fill((30, 30, 40))
+    def draw_screen(mx, my, current_bg_x):
+        # Nền cuộn
+        if bg_image:
+            screen.blit(bg_image, (int(current_bg_x), 0))
+            screen.blit(bg_image, (int(current_bg_x) - WIDTH, 0))
+            # Overlay làm tối màu nền 1 chút để dễ nhìn vũ khí
+            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 100))
+            screen.blit(overlay, (0, 0))
+        else:
+            screen.fill((30, 30, 40))
+            
         draw_text_with_shadow("CHOOSE YOUR WEAPON", game_assets['font_level_title'], (255, 215, 0), screen, WIDTH//2, 80)
         
         pygame.draw.rect(screen, (100, 100, 100) if btn_back.collidepoint((mx, my)) else (50, 50, 50), btn_back, border_radius=10)
@@ -736,22 +767,32 @@ def weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_
             is_hover = rect.collidepoint((mx, my))
             is_selected = (name == SELECTED_WEAPON)
             
-            bg_color = (80, 80, 90) if is_hover else (50, 50, 60)
+            bg_color = (80, 80, 90, 200) if is_hover else (50, 50, 60, 200)
             border_color = (100, 255, 100) if is_selected else (30, 30, 30)
             
-            pygame.draw.rect(screen, bg_color, rect, border_radius=15)
-            pygame.draw.rect(screen, border_color, rect, width=4 if is_selected else 2, border_radius=15)
+            # Vẽ Box chứa vũ khí (trong suốt)
+            box_surf = pygame.Surface(rect.size, pygame.SRCALPHA)
+            pygame.draw.rect(box_surf, bg_color, box_surf.get_rect(), border_radius=15)
+            pygame.draw.rect(box_surf, border_color, box_surf.get_rect(), width=4 if is_selected else 2, border_radius=15)
+            screen.blit(box_surf, rect.topleft)
             
+            # Vẽ vũ khí bên trong Box
             img = weapons_data[name]
-            screen.blit(img, img.get_rect(center=rect.center))
-            draw_text_with_shadow(name.upper(), game_assets['font_level_diff'], (255, 255, 255), screen, rect.centerx, rect.bottom + 25)
+            screen.blit(img, img.get_rect(center=(rect.centerx, rect.centery - 10)))
+            draw_text_with_shadow(name.upper(), game_assets['font_level_diff'], (255, 255, 255), screen, rect.centerx, rect.bottom - 20)
 
-    transition_in(clock, lambda: draw_screen(-100, -100))
+    transition_in(clock, lambda: draw_screen(-100, -100, 0))
     
     running = True
     while running:
         mx, my = pygame.mouse.get_pos()
-        draw_screen(mx, my)
+        
+        # Cập nhật cuộn nền sang phải
+        bg_x += 1 
+        if bg_x >= WIDTH:
+            bg_x = 0
+            
+        draw_screen(mx, my, bg_x)
         
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
