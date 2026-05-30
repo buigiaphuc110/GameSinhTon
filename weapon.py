@@ -725,9 +725,9 @@ def weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_
             
     bg_x = 0
     
-    # --- CHIA LƯỚI GRID ---
+    # --- CHIA LƯỚI GRID ĐỂ KHÔNG BỊ TRÀN ---
     BOX_SIZE, GAP = 120, 30
-    cols = 4 if len(weapon_names) >= 4 else len(weapon_names) # Tối đa 4 cột
+    cols = 4 if len(weapon_names) >= 4 else len(weapon_names) # Tối đa 4 ô 1 hàng
     if cols == 0: cols = 1
     rows = math.ceil(len(weapon_names) / cols)
     
@@ -747,11 +747,11 @@ def weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_
     btn_back = pygame.Rect(20, 20, 70, 45)
 
     def draw_screen(mx, my, current_bg_x):
-        # Nền cuộn
+        # Nền cuộn mượt mà
         if bg_image:
             screen.blit(bg_image, (int(current_bg_x), 0))
             screen.blit(bg_image, (int(current_bg_x) - WIDTH, 0))
-            # Overlay làm tối màu nền 1 chút để dễ nhìn vũ khí
+            # Lớp phủ làm tối màn hình một chút để nổi bật giao diện
             overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 100))
             screen.blit(overlay, (0, 0))
@@ -760,23 +760,24 @@ def weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_
             
         draw_text_with_shadow("CHOOSE YOUR WEAPON", game_assets['font_level_title'], (255, 215, 0), screen, WIDTH//2, 80)
         
+        # Nút Back
         pygame.draw.rect(screen, (100, 100, 100) if btn_back.collidepoint((mx, my)) else (50, 50, 50), btn_back, border_radius=10)
         draw_text_with_shadow("<<", game_assets['font_btn'], (255, 255, 255), screen, btn_back.centerx, btn_back.centery)
         
+        # Hiển thị các hộp vũ khí
         for rect, name in boxes:
             is_hover = rect.collidepoint((mx, my))
             is_selected = (name == SELECTED_WEAPON)
             
+            # Khung viền mờ trong suốt (Alpha = 200)
             bg_color = (80, 80, 90, 200) if is_hover else (50, 50, 60, 200)
             border_color = (100, 255, 100) if is_selected else (30, 30, 30)
             
-            # Vẽ Box chứa vũ khí (trong suốt)
             box_surf = pygame.Surface(rect.size, pygame.SRCALPHA)
             pygame.draw.rect(box_surf, bg_color, box_surf.get_rect(), border_radius=15)
             pygame.draw.rect(box_surf, border_color, box_surf.get_rect(), width=4 if is_selected else 2, border_radius=15)
             screen.blit(box_surf, rect.topleft)
             
-            # Vẽ vũ khí bên trong Box
             img = weapons_data[name]
             screen.blit(img, img.get_rect(center=(rect.centerx, rect.centery - 10)))
             draw_text_with_shadow(name.upper(), game_assets['font_level_diff'], (255, 255, 255), screen, rect.centerx, rect.bottom - 20)
@@ -787,7 +788,7 @@ def weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_
     while running:
         mx, my = pygame.mouse.get_pos()
         
-        # Cập nhật cuộn nền sang phải
+        # Cập nhật tọa độ để cuộn màn hình
         bg_x += 1 
         if bg_x >= WIDTH:
             bg_x = 0
@@ -799,12 +800,18 @@ def weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                # XỬ LÝ ÂM THANH CLICK VÀ THOÁT MENU
                 if btn_back.collidepoint((mx, my)):
+                    if game_assets.get('sound_button'):
+                        game_assets['sound_button'].play()
                     transition_out(clock)
                     running = False
                 
+                # XỬ LÝ ÂM THANH KHI CHỌN VŨ KHÍ MỚI
                 for rect, name in boxes:
                     if rect.collidepoint((mx, my)):
+                        if SELECTED_WEAPON != name and game_assets.get('sound_button'):
+                            game_assets['sound_button'].play()
                         SELECTED_WEAPON = name
                         
         pygame.display.update()

@@ -5,12 +5,13 @@ import math
 import random
 import gameplay
 import weapon 
-import score  # <--- Đã thêm thư viện score vào đây
+import score  
 
 # ==========================================
 # KHỞI TẠO VÀ CẤU HÌNH CƠ BẢN
 # ==========================================
 pygame.init()
+pygame.mixer.init() # Khởi tạo module âm thanh
 
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -36,14 +37,33 @@ COLOR_ENDLESS = (255, 50, 50)
 def load_assets():
     assets = {}
     
-    # Background chính
+    # --- KHỞI TẠO ÂM THANH MENU ---
+    try:
+        assets['sound_button'] = pygame.mixer.Sound(os.path.join('sound', 'button.mp3'))
+    except Exception as e:
+        print("Lỗi load button sound:", e)
+        assets['sound_button'] = None
+
+    try:
+        assets['sound_selectstage'] = pygame.mixer.Sound(os.path.join('sound', 'selectstage.mp3'))
+    except Exception as e:
+        print("Lỗi load selectstage sound:", e)
+        assets['sound_selectstage'] = None
+
+    try:
+        pygame.mixer.music.load(os.path.join('sound', 'menusound.mp3'))
+        pygame.mixer.music.set_volume(0.5)
+        pygame.mixer.music.play(-1) # Phát nhạc nền Menu lặp vô tận
+    except Exception as e:
+        print("Lỗi load nhạc nền menusound:", e)
+
+    # --- KHỞI TẠO HÌNH ẢNH & FONT ---
     if os.path.exists('background.png') and os.path.exists('background2.png'):
         assets['bg1'] = pygame.transform.scale(pygame.image.load('background.png').convert(), (WIDTH, HEIGHT))
         assets['bg2'] = pygame.transform.scale(pygame.image.load('background2.png').convert(), (WIDTH, HEIGHT))
     else:
         assets['bg1'] = assets['bg2'] = None
 
-    # Background chọn màn chơi
     bg3_frames = []
     frame_idx = 1
     while True:
@@ -58,7 +78,6 @@ def load_assets():
         bg3_frames.append(pygame.transform.scale(pygame.image.load('background3.png').convert(), (WIDTH, HEIGHT)))
     assets['bg3'] = bg3_frames if bg3_frames else None
 
-    # Load toàn bộ background ground 1 -> 4
     for i in range(1, 5):
         ground_key = f'ground{i}'
         file_name = f'{ground_key}.png'
@@ -68,7 +87,6 @@ def load_assets():
         else:
             assets[ground_key] = None
 
-    # Load mây bay
     cloud_assets = []
     cloud_size_ranges = [(150, 60, 200, 80), (200, 80, 250, 100), (250, 100, 300, 120), (300, 120, 350, 140), (350, 140, 450, 180)]
     if os.path.exists('cloud.png'):
@@ -85,7 +103,6 @@ def load_assets():
             cloud_assets.append(dummy)
     assets['clouds'] = cloud_assets
 
-    # Load whiteball
     if os.path.exists('whiteball.png'):
         assets['whiteball'] = pygame.transform.scale(pygame.image.load('whiteball.png').convert_alpha(), (30, 30))
     else:
@@ -93,7 +110,6 @@ def load_assets():
         pygame.draw.circle(dummy_ball, WHITE, (15, 15), 15)
         assets['whiteball'] = dummy_ball
 
-    # Load ảnh các nút chọn màn
     base_names = ['game1', 'game2', 'game3', 'endless']
     level_keys = ['level1', 'level2', 'level3', 'level4']
     for i, base in enumerate(base_names):
@@ -110,7 +126,6 @@ def load_assets():
             frames.append(pygame.image.load(f"{base}.png").convert())
         assets[level_keys[i]] = frames 
 
-    # Load Fonts
     if os.path.exists('pixel_font.ttf'):
         assets['font_title'] = pygame.font.Font('pixel_font.ttf', 60)
         assets['font_btn'] = pygame.font.Font('pixel_font.ttf', 30)
@@ -132,6 +147,9 @@ def load_assets():
 # Tải tài nguyên ngay khi khởi động
 game_assets = load_assets()
 
+def play_btn_sound():
+    if game_assets.get('sound_button'):
+        game_assets['sound_button'].play()
 
 # ==========================================
 # CÁC LỚP ĐỐI TƯỢNG (CLASSES)
@@ -231,7 +249,6 @@ def level_selection_menu(clock):
     frames_base = [pygame.Rect(start_x + i * (FRAME_W + GAP), 230, FRAME_W, FRAME_H) for i in range(4)]
     btn_back = pygame.Rect(20, 20, 70, 45) 
     
-    # Thiết lập tham số gán cho từng nút bấm
     level_keys = ['level1', 'level2', 'level3', 'level4']
     hover_texts = [
         ("EASY", COLOR_EASY), 
@@ -247,13 +264,11 @@ def level_selection_menu(clock):
     def draw_screen(mx=-100, my=-100):
         time_now = pygame.time.get_ticks() 
         
-        # Vẽ Background
         if game_assets['bg3']: 
             screen.blit(game_assets['bg3'][(time_now // 200) % len(game_assets['bg3'])], (0, 0))
         else: 
             screen.fill((30, 30, 40)) 
             
-        # Cập nhật và vẽ Mây & Whiteballs
         for cloud in clouds: 
             cloud.update()
             cloud.draw(screen)
@@ -261,20 +276,16 @@ def level_selection_menu(clock):
             ball.update(time_now)
             ball.draw(screen)
             
-        # Tiêu đề và nút Back
         draw_text_with_shadow('SELECT A STAGE', game_assets['font_level_title'], LEVEL_TITLE_COLOR, screen, WIDTH//2, 60)
         draw_styled_button(screen, btn_back, HOVER_COLOR if btn_back.collidepoint((mx, my)) else BUTTON_COLOR, '<<', game_assets['font_btn'])
 
-        # Vẽ danh sách màn chơi
         for i, rect in enumerate(frames_base):
             is_hover = rect.collidepoint((mx, my))
             frame_rect = rect.inflate(12, 12)
             
-            # Khung viền ảnh
             pygame.draw.rect(screen, (200, 160, 40), frame_rect, border_radius=8) 
             pygame.draw.rect(screen, (70, 50, 15), frame_rect, width=4, border_radius=8) 
             
-            # Ảnh thumbnail màn chơi
             if game_assets[level_keys[i]]:
                 img = game_assets[level_keys[i]][(time_now // 150) % len(game_assets[level_keys[i]])]
                 screen.blit(pygame.transform.scale(img, rect.size), rect.topleft)
@@ -282,13 +293,11 @@ def level_selection_menu(clock):
                 pygame.draw.rect(screen, (70, 70, 80), rect)
                 draw_text_with_shadow(f"IMG {i+1}", game_assets['font_level_txt'], (150, 150, 150), screen, rect.centerx, rect.centery)
 
-            # Hiệu ứng hover cho ảnh
             if is_hover:
                 overlay = pygame.Surface(rect.size, pygame.SRCALPHA)
                 overlay.fill((255, 255, 255, 60 + int(math.sin(time_now * 0.01) * 30))) 
                 screen.blit(overlay, rect.topleft)
 
-            # Badge độ khó
             text_str, text_color = hover_texts[i]
             box_w, box_h = game_assets['font_level_diff'].size(text_str)
             text_bg_rect = pygame.Rect(frame_rect.centerx - (box_w + 16) // 2, frame_rect.top - (box_h + 10) - 15, box_w + 16, box_h + 10)
@@ -313,19 +322,29 @@ def level_selection_menu(clock):
 
         if click:
             if btn_back.collidepoint((mx, my)):
+                play_btn_sound() # Âm thanh bấm nút
                 transition_to_black_pixel(clock)
                 return 
             
             for i, rect in enumerate(frames_base):
                 if rect.collidepoint((mx, my)):
+                    if game_assets.get('sound_selectstage'):
+                        game_assets['sound_selectstage'].play() # Âm thanh khi chọn màn chơi
+                    
+                    pygame.mixer.music.stop() # TẮT NHẠC MENU ĐỂ NHƯỜNG CHO BATTLE THEME
                     transition_to_black_pixel(clock) 
                     
-                    # --- GỌI HÀM GAMEPLAY CHUNG VÀ TRUYỀN PARAMETER VÀO ---
                     mode_name = hover_texts[i][0]  
                     ground_key = mode_ground_mapping[i] 
                     gameplay.run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_to_black_pixel, mode_name, ground_key)
                     
-                    # Cập nhật fade-in lại khi quay về màn chọn level
+                    # Chơi xong quay lại, bật lại nhạc nền Menu
+                    try:
+                        pygame.mixer.music.load(os.path.join('sound', 'menusound.mp3'))
+                        pygame.mixer.music.play(-1)
+                    except:
+                        pass
+                    
                     transition_fade_in(clock, lambda: draw_screen(mx, my))
             click = False
             
@@ -342,7 +361,6 @@ def main_menu():
     bg_x = 0
     
     while True:
-        # Cập nhật cuộn Background
         if game_assets['bg1'] and game_assets['bg2']:
             for i in range(4): 
                 screen.blit(game_assets['bg1' if i % 2 == 0 else 'bg2'], (bg_x + WIDTH * i, 0))
@@ -352,46 +370,42 @@ def main_menu():
         else: 
             screen.fill(BLACK) 
         
-        # Tiêu đề
         draw_text_with_shadow('GAME SINH TỒN 2D', game_assets['font_title'], TITLE_COLOR, screen, WIDTH//2, 100)
         
-        # Lấy tọa độ chuột
         mx, my = pygame.mouse.get_pos()
 
-        # Tạo danh sách các nút
         buttons = [
             (pygame.Rect((WIDTH - 220)//2, 220 + 80 * i, 220, 60), text) 
             for i, text in enumerate(['START', 'WEAPON', 'SCORE', 'EXIT'])
         ]
 
-        # Vẽ nút bấm
         for rect, text in buttons:
             is_hover = rect.collidepoint((mx, my))
             draw_styled_button(screen, rect, HOVER_COLOR if is_hover else BUTTON_COLOR, text, game_assets['font_btn'])
 
-        # Xử lý Click Menu
         if click:
             if buttons[0][0].collidepoint((mx, my)):
+                play_btn_sound()
                 transition_to_black_pixel(clock) 
                 level_selection_menu(clock)      
                 transition_fade_in(clock, lambda: screen.fill(BLACK)) 
             elif buttons[1][0].collidepoint((mx, my)): 
-                # --- Gọi hàm chọn vũ khí từ module weapon ---
+                play_btn_sound()
                 transition_to_black_pixel(clock)
                 weapon.weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_to_black_pixel, transition_fade_in)
                 transition_fade_in(clock, lambda: screen.fill(BLACK))
             elif buttons[2][0].collidepoint((mx, my)): 
-                # --- ĐÃ SỬA: Gọi hàm hiển thị bảng điểm từ module score ---
+                play_btn_sound()
                 transition_to_black_pixel(clock)
                 score.score_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_to_black_pixel, transition_fade_in)
                 transition_fade_in(clock, lambda: screen.fill(BLACK))
             elif buttons[3][0].collidepoint((mx, my)): 
+                play_btn_sound()
                 pygame.quit()
                 sys.exit()
                 
             click = False
 
-        # Bắt sự kiện Window
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
                 pygame.quit()

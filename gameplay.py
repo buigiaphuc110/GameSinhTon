@@ -386,7 +386,6 @@ class EnemyShip:
     def __init__(self, x, y, image, wave=1):
         self.x, self.y = float(x), float(y)
         self.type = 'ship'
-        # Dùng ảnh tĩnh thường, không phải flipbook
         self.image = pygame.transform.scale(image, (80, 80))
         
         stat_mult = 1.0 + max(0, (wave - 3) // 2) * 0.20 if wave >= 5 else 1.0
@@ -422,7 +421,6 @@ class EnemyShip:
             if all_obstacles:
                 hit_obstacle = any(dummy_rect.colliderect(obs) for obs in all_obstacles)
                 
-            # LOGIC BIỂN: Thuyền chỉ di chuyển BÊN TRONG MÀN HÌNH (Biển) và tránh chạm vật cản
             if not hit_obstacle and dist > 150:
                 if 40 < nx < width - 40 and 40 < ny < height - 40:
                     self.x = nx
@@ -739,7 +737,6 @@ def load_game_entities(game_assets):
                 frames.append(dummy)
         game_assets['spec_frames'] = frames
 
-    # Ảnh Ship (Tĩnh, không flipbook)
     if 'ship_img' not in game_assets:
         path = os.path.join('opp', 'ship.png')
         if os.path.exists(path):
@@ -773,8 +770,40 @@ def load_game_entities(game_assets):
                 pygame.draw.ellipse(shadow, (0, 0, 0, conf.get('s_alpha', 20)), (0, 0, w, max(1, h // 2)))
                 game_assets[f'{key}_shadow'] = shadow
 
+
 # --- MAIN LOOP ---
 def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mode_name, ground_key):
+    # ==========================
+    # KHỞI TẠO ÂM THANH (SOUND)
+    # ==========================
+    pygame.mixer.init()
+    if 'sfx' not in game_assets:
+        game_assets['sfx'] = {}
+        # Đã thêm buffsound vào danh sách load âm thanh tự động
+        sfx_list = ['axesound', 'bombsound', 'flowersound', 'gunsound', 'swordsound', 'wrenchsound', 'hit', 'explosion', 'lose', 'winsound', 'win', 'buffsound']
+        for sfx in sfx_list:
+            path = os.path.join('sound', f"{sfx}.mp3")
+            if os.path.exists(path):
+                try: game_assets['sfx'][sfx] = pygame.mixer.Sound(path)
+                except: pass
+
+    def play_cached_sfx(name):
+        """Hàm hỗ trợ phát âm thanh một cách an toàn"""
+        if 'sfx' in game_assets and name in game_assets['sfx']:
+            game_assets['sfx'][name].play()
+        # Fallback nếu không có file name cụ thể
+        elif name in ['winsound', 'win']:
+            if 'win' in game_assets.get('sfx', {}): game_assets['sfx']['win'].play()
+            elif 'winsound' in game_assets.get('sfx', {}): game_assets['sfx']['winsound'].play()
+
+    # Bắt đầu phát nhạc nền (battle theme) tự động lặp lại
+    try:
+        pygame.mixer.music.load(os.path.join('sound', 'battletheme.mp3'))
+        pygame.mixer.music.set_volume(0.6)
+        pygame.mixer.music.play(-1)
+    except:
+        pass
+
     load_game_entities(game_assets)
     buff_images = load_buff_images()
     
@@ -875,6 +904,9 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         
                         weapon_cooldown_timer = current_time
                         
+                        if weapon.SELECTED_WEAPON in ['flower', 'gun']:
+                            play_cached_sfx(f"{weapon.SELECTED_WEAPON}sound")
+                        
                         if player_buffs['kaboom'] > 0:
                             kaboom_throws += 1
                             required_throws = max(2, 6 - player_buffs['kaboom'])
@@ -889,14 +921,13 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 player_special.trigger_random_skill()
 
         if not player.update_environment_logic(mode_name, WIDTH, HEIGHT):
-            running = False
+            player.health = 0.0
 
         if player_poison_time_left > 0:
             if current_time - player_last_poison_tick >= 1000:
                 player.health -= 1
                 player_last_poison_tick = current_time
                 player_poison_time_left -= 1
-                if player.health <= 0: running = False
 
         current_obstacles = [ent.rect for ent in active_endless_entities] if mode_name == 'ENDLESS' else all_obstacles
 
@@ -919,24 +950,18 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     cx, cy = (camera_x, camera_y) if mode_name == 'ENDLESS' else (0, 0)
                     e_type = enemies_to_spawn.pop()
                     
-                    # LOGIC SPAWN ĐẶC BIỆT CHO QUÁI SHIP: Chỉ spawn TRONG MÀN HÌNH (Biển) và tránh vật cản (Đá/Cây)
                     sx, sy = 0, 0
                     if e_type == 'ship':
                         for _ in range(50):
-                            # Spawn ngẫu nhiên bên trong màn hình
                             sx = random.randint(cx + 40, cx + WIDTH - 40)
                             sy = random.randint(cy + 40, cy + HEIGHT - 40)
-                            
-                            # Tránh spawn quá gần người chơi (bất ngờ)
                             if math.hypot(sx - player.x, sy - player.y) < 250:
                                 continue
-                                
                             dummy_rect = pygame.Rect(0, 0, 80, 80)
                             dummy_rect.center = (sx, sy)
                             if not any(dummy_rect.colliderect(obs) for obs in current_obstacles):
                                 break
                     else:
-                        # Các quái vật bình thường khác tiếp tục spawn từ NGUÀI RÌA (Trên cạn) đi vào
                         side = random.choice(['top', 'bottom', 'left', 'right'])
                         if side == 'top':      sx, sy = random.randint(cx - 50, cx + WIDTH + 50), cy - 60
                         elif side == 'bottom': sx, sy = random.randint(cx - 50, cx + WIDTH + 50), cy + HEIGHT + 60
@@ -953,7 +978,11 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     enemy_spawn_timer = max(0.2, 1.0 - (current_wave * 0.05))
             
             elif len(enemies_to_spawn) == 0 and len(active_enemies) == 0:
-                if current_wave >= max_waves: game_state = "WON"
+                if current_wave >= max_waves:
+                    if game_state != "WON":
+                        pygame.mixer.music.stop()
+                        play_cached_sfx('winsound') 
+                        game_state = "WON"
                 else:
                     current_wave += 1
                     game_state = "CHOOSING_BUFF"
@@ -973,7 +1002,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 if shield_hp > 0: shield_hp -= dmg_taken
                 else: 
                     player.take_damage_and_knockback(dmg_taken, enemy.x, enemy.y, 10, WIDTH, HEIGHT, mode_name)
-                    if player.health <= 0: running = False
 
         for proj in enemy_projectiles[:]:
             if getattr(proj, 'is_chain', False):
@@ -1001,7 +1029,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     if shield_hp > 0: shield_hp -= dmg
                     else: 
                         player.health -= dmg
-                        if player.health <= 0: running = False
                     player_poison_time_left = 3
                     player_last_poison_tick = current_time
                     if proj in enemy_projectiles: enemy_projectiles.remove(proj)
@@ -1022,7 +1049,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         if shield_hp > 0: shield_hp -= dmg_taken
                         else: 
                             player.take_damage_and_knockback(dmg_taken, danger.x, danger.y, 25, WIDTH, HEIGHT, mode_name)
-                            if player.health <= 0: running = False
                     if danger.state == "DONE": active_dangers.remove(danger)
             else:
                 active_dangers.clear() 
@@ -1072,6 +1098,9 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             if was_thrown and pw.state != 'thrown' and weapon.SELECTED_WEAPON != 'sword':
                 pw.explosion = weapon.WeaponExplosion(pw.x, pw.y, weapon.SELECTED_WEAPON)
                 
+                if weapon.SELECTED_WEAPON not in ['flower', 'gun', 'tank', 'sword']:
+                    play_cached_sfx(f"{weapon.SELECTED_WEAPON}sound")
+                
                 if weapon.SELECTED_WEAPON == 'axe':
                     for other_enemy in active_enemies:
                         if math.hypot(other_enemy.x - pw.x, other_enemy.y - pw.y) < 180:
@@ -1098,6 +1127,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     base_dmg = 40
                     if weapon.SELECTED_WEAPON == 'sword':
                         base_dmg = 75
+                        play_cached_sfx('swordsound') 
                     elif weapon.SELECTED_WEAPON in ['bomb', 'bomb1', 'bomb2']:
                         base_dmg = 100
                         
@@ -1110,6 +1140,9 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         pw.action_time = current_time
                         pw.rect.center = (-9999, -9999) 
                         pw.explosion = weapon.WeaponExplosion(pw.x, pw.y, weapon.SELECTED_WEAPON)
+                        
+                        if weapon.SELECTED_WEAPON not in ['flower', 'gun', 'tank', 'sword']:
+                            play_cached_sfx(f"{weapon.SELECTED_WEAPON}sound")
                         
                         if weapon.SELECTED_WEAPON == 'axe':
                             for other_enemy in active_enemies:
@@ -1139,6 +1172,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         pw.explosion = weapon.WeaponExplosion(pw.active_bullet['x'], pw.active_bullet['y'], 'gun')
                         pw.active_bullet = None
                         pw.state = 'orbit'
+                        play_cached_sfx('hit')
                         
                 if is_dead or enemy.health <= 0:
                     if enemy.type == 'orange':
@@ -1160,7 +1194,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 if shield_hp > 0: shield_hp -= dmg
                 else: 
                     player.health -= dmg
-                    if player.health <= 0: running = False
             if ex.life <= 0: orange_explosions.remove(ex)
             
         for kex in kaboom_explosions[:]:
@@ -1261,6 +1294,9 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 draw_buff_card(screen, game_assets['font_level_diff'], buff_name, BUFF_DESCS[buff_name], rect, rect.collidepoint(mx, my), player_buffs[buff_name], buff_images)
                 
                 if click_x != -1 and rect.collidepoint(click_x, click_y):
+                    # --- GỌI ÂM THANH KHI CHỌN BUFF ---
+                    play_cached_sfx('buffsound')
+                    
                     if player_buffs[buff_name] < 3: player_buffs[buff_name] += 1
                     
                     if buff_name == 'health': 
@@ -1293,7 +1329,21 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             draw_text_with_shadow(f"OXYGEN: {max(0, int(15.0 - player.water_timer))}s", game_assets['font_level_diff'], (100, 200, 255), screen, WIDTH // 2, 30)
         draw_text_with_shadow(f"{mode_name} MODE - PRESS ESC TO RETURN", game_assets['font_level_diff'], (220, 220, 220), screen, WIDTH // 2, HEIGHT - 25)
         
+        if player.health <= 0 and running:
+            pygame.mixer.music.stop()
+            play_cached_sfx('lose')
+            running = False
+        
         pygame.display.update()
 
     score.game_score.save_high_score()
+    
+    try:
+        pygame.mixer.music.stop()
+        pygame.mixer.music.load(os.path.join('sound', 'menusound.mp3'))
+        pygame.mixer.music.set_volume(0.5)
+        pygame.mixer.music.play(-1)
+    except:
+        pass
+        
     transition_func(clock)

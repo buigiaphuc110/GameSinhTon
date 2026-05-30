@@ -1,5 +1,6 @@
 import pygame
 import math
+import os
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -32,6 +33,12 @@ class Player:
         # Biến quản lý Lava
         self.in_lava = False
         self.lava_damage_timer = 0.0
+        
+        # --- ÂM THANH KHI BỊ THƯƠNG ---
+        try:
+            self.hit_sound = pygame.mixer.Sound(os.path.join('sound', 'playerhit.mp3'))
+        except:
+            self.hit_sound = None
 
     # ==========================================
     # LỚP MÀNG LỌC BẢO VỆ MÁU THÔNG MINH
@@ -55,9 +62,11 @@ class Player:
             # Áp dụng trừ máu
             self._health = value
             
-            # Nếu lượng sát thương nhận vào > 5 -> Kích hoạt 0.5s bất tử
+            # Nếu lượng sát thương nhận vào > 4 -> Kích hoạt 0.5s bất tử và phát âm thanh
             if damage_taken > 4:
                 self.invincible_until = current_time + self.invincibility_duration
+                if self.hit_sound:
+                    self.hit_sound.play()
         else:
             # Nếu là Hồi máu (Heal) hoặc cài đặt máu ban đầu thì cho phép bình thường
             self._health = value
@@ -154,7 +163,7 @@ class Player:
         """Hàm xử lý trừ máu liên tục và mượt mà khi đứng trong Lava"""
         if self.in_lava:
             damage_per_second = 45.0 
-            # Cứ mỗi frame bị trừ 1 xíu máu (vd: 0.75 máu). Vì bé hơn 5 nên sẽ không bị kích hoạt bất tử
+            # Cứ mỗi frame bị trừ 1 xíu máu (vd: 0.75 máu). Vì bé hơn 4 nên sẽ không bị kích hoạt bất tử
             # Nhưng nếu đang bất tử sẵn thì nó sẽ không trừ
             self.health -= damage_per_second * dt
             
