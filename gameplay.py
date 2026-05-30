@@ -272,6 +272,7 @@ class EnemyNorBig(EnemyNor):
             pygame.draw.rect(screen, (50, 15, 15), (bx, by, 40, 4))
             pygame.draw.rect(screen, (60, 230, 60), (bx, by, max(0, int(40 * (self.health / self.max_health))), 4))
 
+
 class EnemyNorGreen(EnemyNor):
     def __init__(self, x, y, frames, wave=1):
         super().__init__(x, y, frames, wave)
@@ -480,7 +481,7 @@ class OrangeExplosion:
             screen.blit(surf, (int(self.x - camera_x - self.max_radius), int(self.y - camera_y - self.max_radius)))
 
 class KaboomExplosion:
-    def __init__(self, x, y, level):
+    def __init__(self, x, y, level, multiplier=1.0):
         self.x, self.y = x, y
         self.radius = 5
         if level >= 3:
@@ -489,7 +490,12 @@ class KaboomExplosion:
             self.max_radius = 160 if level == 1 else 300
             
         self.life = 255
-        self.level, self.damage = level, 75 * level
+        self.level = level
+        
+        # --- CẬP NHẬT LẠI: Sát thương cơ bản mới: 75 + (cấp * 12) ---
+        base_damage = 75 + (level * 12)
+        self.damage = base_damage * multiplier
+        
         self.has_dealt_damage = False
 
     def update(self, enemies):
@@ -523,11 +529,13 @@ class KaboomExplosion:
 # ==========================================
 class MagicOrb:
     def __init__(self):
-        self.angle, self.radius, self.damage = 0, 120, 10
+        self.angle, self.radius, self.base_damage = 0, 120, 10
 
-    def update_and_draw(self, player, enemies, screen, cx, cy, level):
+    def update_and_draw(self, player, enemies, screen, cx, cy, level, dmg_multiplier):
         if level <= 0: return
         self.angle = (self.angle + 4 + level*2) % 360
+        
+        final_damage = (self.base_damage * level) * dmg_multiplier
         
         for i in range(level):
             offset_angle = (self.angle + i * (360 / level)) % 360
@@ -539,7 +547,7 @@ class MagicOrb:
 
             for e in enemies:
                 if math.hypot(e.x - ox, e.y - oy) < 30:
-                    e.take_damage(self.damage * level)
+                    e.take_damage(final_damage)
                     e.speed = max(10, e.speed - 15)
 
 # ==========================================
@@ -562,7 +570,7 @@ def get_wave_enemies(mode_name, wave_num):
 
 BUFF_TYPES = ['dame', 'health', 'speed', 'kaboom', 'x2', 'coin', 'shield', 'magic']
 BUFF_DESCS = {
-    'dame': "+30% Damage Multiplier",
+    'dame': "+30% Dmg/lv, +0.75%/Kill",
     'health': "+50 Max HP and Regen",
     'speed': "+Move Speed, -Weapon CD",
     'kaboom': "Throws trigger Explosion",
@@ -577,19 +585,33 @@ def draw_buff_card(screen, font, title, desc, rect, is_hover, level, buff_images
     shape_surf = pygame.Surface(card_rect.size, pygame.SRCALPHA)
     pygame.draw.rect(shape_surf, (40, 40, 60, 230), shape_surf.get_rect(), border_radius=15)
     
+    # --- CẬP NHẬT MÀU SẮC VIỀN THEO LEVEL ---
+    if level == 0:
+        border_col = (200, 200, 200) # Trắng bạc (Lv0 -> Lv1)
+        glow_col = (200, 200, 200, 60)
+        title_col = (255, 255, 255) if is_hover else (200, 200, 200)
+    elif level == 1:
+        border_col = (255, 215, 0) # Vàng Kim (Lv1 -> Lv2)
+        glow_col = (255, 215, 0, 60)
+        title_col = (255, 215, 0) if is_hover else (200, 180, 0)
+    else:
+        border_col = (0, 255, 255) # Kim Cương Xanh (Lv2 -> Lv3)
+        glow_col = (0, 255, 255, 60)
+        title_col = (0, 255, 255) if is_hover else (0, 200, 200)
+    
     if is_hover:
-        pygame.draw.rect(shape_surf, (255, 215, 0), shape_surf.get_rect(), width=4, border_radius=15)
+        pygame.draw.rect(shape_surf, border_col, shape_surf.get_rect(), width=4, border_radius=15)
         glow = pygame.Surface(card_rect.size, pygame.SRCALPHA)
-        pygame.draw.rect(glow, (255, 215, 0, 50), glow.get_rect(), border_radius=15)
+        pygame.draw.rect(glow, glow_col, glow.get_rect(), border_radius=15)
         shape_surf.blit(glow, (0, 0))
     else:
-        pygame.draw.rect(shape_surf, (100, 100, 150), shape_surf.get_rect(), width=2, border_radius=15)
+        muted = (max(0, border_col[0]-80), max(0, border_col[1]-80), max(0, border_col[2]-80))
+        pygame.draw.rect(shape_surf, muted, shape_surf.get_rect(), width=2, border_radius=15)
         
     screen.blit(shape_surf, card_rect.topleft)
-    draw_text_with_shadow(title.upper(), font, (255, 215, 0) if is_hover else (200, 200, 200), screen, card_rect.centerx, card_rect.y + 30)
+    draw_text_with_shadow(title.upper(), font, title_col, screen, card_rect.centerx, card_rect.y + 30)
     
-    lvl_color = (100, 255, 100) if level > 0 else WHITE
-    draw_text_with_shadow(f"Lv: {level} -> {level+1}", font, lvl_color, screen, card_rect.centerx, card_rect.y + 60)
+    draw_text_with_shadow(f"Lv: {level} -> {level+1}", font, border_col, screen, card_rect.centerx, card_rect.y + 60)
     
     if title in buff_images and buff_images[title]:
         img = pygame.transform.scale(buff_images[title], (80, 80))
@@ -774,7 +796,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
     pygame.mixer.init()
     if 'sfx' not in game_assets:
         game_assets['sfx'] = {}
-        # Đã thêm tanksound vào danh sách tải âm thanh
         sfx_list = ['axesound', 'bombsound', 'flowersound', 'gunsound', 'swordsound', 'wrenchsound', 'hit', 'explosion', 'lose', 'winsound', 'win', 'buffsound', 'tanksound']
         for sfx in sfx_list:
             path = os.path.join('sound', f"{sfx}.mp3")
@@ -782,7 +803,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 try: game_assets['sfx'][sfx] = pygame.mixer.Sound(path)
                 except: pass
             else:
-                # Đề phòng bạn dùng đuôi wav
                 path_wav = os.path.join('sound', f"{sfx}.wav")
                 if os.path.exists(path_wav):
                     try: game_assets['sfx'][sfx] = pygame.mixer.Sound(path_wav)
@@ -795,7 +815,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             if 'win' in game_assets.get('sfx', {}): game_assets['sfx']['win'].play()
             elif 'winsound' in game_assets.get('sfx', {}): game_assets['sfx']['winsound'].play()
             
-    # Lưu hàm phát âm thanh vào game_assets để các file khác (như special.py) cũng có thể gọi
     game_assets['play_sfx'] = play_cached_sfx
 
     try:
@@ -829,6 +848,8 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
     all_obstacles = dirts + rocks + trees
     player = Player(WIDTH // 2, HEIGHT // 2)
     player.kaboom_level = 0
+    player.total_kills = 0
+    player.dame_buff_kills = 0 # --- BIẾN ĐẾM KILLS SAU KHI CÓ BUFF DAME ---
     
     def get_weapon_image():
         path = f"weapon/{weapon.SELECTED_WEAPON}.png"
@@ -876,6 +897,12 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         dt = clock.tick(FPS) / 1000.0 
         camera_x, camera_y = (int(player.x) - WIDTH // 2, int(player.y) - HEIGHT // 2) if mode_name == 'ENDLESS' else (0, 0)
         current_time = pygame.time.get_ticks()
+        
+        # --- HỆ SỐ SÁT THƯƠNG SIÊU KHỦNG ---
+        # Chỉ áp dụng Buff Kill nếu người chơi thực sự lấy thẻ Buff Dame
+        damage_multiplier = 1.0 + (0.3 * player_buffs['dame'])
+        if player_buffs['dame'] > 0:
+            damage_multiplier += (player.dame_buff_kills * 0.0075) # Cộng 0.75% sát thương mỗi mạng
 
         click_x, click_y = -1, -1
         for event in pygame.event.get():
@@ -908,14 +935,15 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         if weapon.SELECTED_WEAPON in ['flower', 'gun']:
                             play_cached_sfx(f"{weapon.SELECTED_WEAPON}sound")
                         
+                        # --- XỬ LÝ CƠ CHẾ KABOOM NÉM VŨ KHÍ ---
                         if player_buffs['kaboom'] > 0:
                             kaboom_throws += 1
-                            required_throws = max(2, 6 - player_buffs['kaboom'])
+                            # CẤP 1 cần 7 lần (8-1), CẤP 2 cần 6 (8-2), CẤP 3 cần 5 (8-3)
+                            required_throws = max(2, 8 - player_buffs['kaboom'])
                             if kaboom_throws >= required_throws:
                                 kaboom_throws = 0
-                                # --- PHÁT ÂM THANH KABOOM NỔ BẰNG TANKSOUND ---
                                 play_cached_sfx('tanksound')
-                                kaboom_explosions.append(KaboomExplosion(player.x, player.y, player_buffs['kaboom']))
+                                kaboom_explosions.append(KaboomExplosion(player.x, player.y, player_buffs['kaboom'], damage_multiplier))
 
                 elif game_state == "CHOOSING_BUFF":
                     click_x, click_y = pygame.mouse.get_pos()
@@ -1086,7 +1114,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             player.update_lava_logic(dt)
 
         weapon_colliders = current_obstacles
-        damage_multiplier = 1.0 + (0.3 * player_buffs['dame'])
         
         for pw in player_weapons:
             if not hasattr(pw, 'hit_targets'):
@@ -1175,8 +1202,14 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         pw.explosion = weapon.WeaponExplosion(pw.active_bullet['x'], pw.active_bullet['y'], 'gun')
                         pw.active_bullet = None
                         pw.state = 'orbit'
+                        play_cached_sfx('hit')
                         
                 if is_dead or enemy.health <= 0:
+                    player.total_kills += 1
+                    # --- NẾU ĐÃ LẤY ĐƯỢC BUFF DAME MỚI BẮT ĐẦU TÍNH KILLS CỘNG DỒN ---
+                    if player_buffs['dame'] > 0:
+                        player.dame_buff_kills += 1
+                        
                     if enemy.type == 'orange':
                         orange_explosions.append(OrangeExplosion(enemy.x, enemy.y, current_wave))
                     elif enemy.type == 'big' and current_wave >= 5:
@@ -1242,7 +1275,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         for kex in kaboom_explosions: kex.draw(screen, camera_x, camera_y)
         
         if game_state == "PLAYING" and player_buffs['magic'] > 0:
-            magic_orb.update_and_draw(player, active_enemies, screen, camera_x, camera_y, player_buffs['magic'])
+            magic_orb.update_and_draw(player, active_enemies, screen, camera_x, camera_y, player_buffs['magic'], damage_multiplier)
 
         player.draw(screen, draw_player_x, draw_player_y, game_assets['font_level_diff'])
         if player_poison_time_left > 0 and (current_time // 100) % 2 == 0:
@@ -1261,7 +1294,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         draw_health_bar(screen, 20, 20, player.health, player.max_health, game_assets['font_level_diff'], shield_hp, 50 * player_buffs['shield'])
         score.game_score.draw_in_game(screen, game_assets['font_level_diff'], 20, 60)
         
-        # --- HUD BUFF ĐÃ CHỌN ---
+        # --- HUD BUFF ĐÃ CHỌN TRONG GAME ---
         buff_start_x = 20
         buff_y = 90
         for b_name, b_lvl in player_buffs.items():
@@ -1277,6 +1310,17 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     lvl_font = pygame.font.SysFont(None, 18, bold=True)
                     text_obj = lvl_font.render(str(b_lvl), True, WHITE)
                     screen.blit(text_obj, text_obj.get_rect(center=(buff_start_x + 32, buff_y)))
+                    
+                    # --- HIỂN THỊ CHÍNH XÁC PHẦN TRĂM DAME CỘNG THÊM ---
+                    if b_name == 'dame':
+                        kill_font = pygame.font.SysFont(None, 15, bold=True)
+                        bonus_pct = player.dame_buff_kills * 0.75 # 0.75% mỗi mạng
+                        kill_text = kill_font.render(f"+{bonus_pct:g}%", True, (255, 200, 50))
+                        
+                        text_rect = kill_text.get_rect(midtop=(buff_start_x + 16, buff_y + 35))
+                        bg_rect = text_rect.inflate(4, 4)
+                        pygame.draw.rect(screen, (0, 0, 0, 150), bg_rect, border_radius=3)
+                        screen.blit(kill_text, text_rect)
                     
                     buff_start_x += 42 
 
