@@ -12,8 +12,14 @@ class Player:
         self.hitbox_radius = 18
         
         self.base_speed = 3.05
-        self.health = 100.0  # Chuyển thành số thực để trừ máu mượt hơn
+        
+        # Biến ẩn lưu trữ máu thực sự
+        self._health = 100.0  
         self.max_health = 100
+        
+        # --- CƠ CHẾ BẤT TỬ (I-FRAMES) ---
+        self.invincible_until = 0       # Thời điểm (ms) kết thúc bất tử
+        self.invincibility_duration = 500 # 500ms = 0.5 giây
         
         # Biến tạo quán tính (dùng cho knockback)
         self.vx = 0.0
@@ -26,6 +32,35 @@ class Player:
         # Biến quản lý Lava
         self.in_lava = False
         self.lava_damage_timer = 0.0
+
+    # ==========================================
+    # LỚP MÀNG LỌC BẢO VỆ MÁU THÔNG MINH
+    # ==========================================
+    @property
+    def health(self):
+        return self._health
+
+    @health.setter
+    def health(self, value):
+        current_time = pygame.time.get_ticks()
+        
+        # Nếu Player đang bị trừ máu (nhận sát thương)
+        if value < self._health:
+            damage_taken = self._health - value
+            
+            # Nếu đang trong thời gian bất tử -> Chặn sát thương, không làm gì cả
+            if current_time < self.invincible_until:
+                return 
+                
+            # Áp dụng trừ máu
+            self._health = value
+            
+            # Nếu lượng sát thương nhận vào > 5 -> Kích hoạt 0.5s bất tử
+            if damage_taken > 4:
+                self.invincible_until = current_time + self.invincibility_duration
+        else:
+            # Nếu là Hồi máu (Heal) hoặc cài đặt máu ban đầu thì cho phép bình thường
+            self._health = value
 
     def handle_movement(self, keys, all_obstacles, grasses, mode_name, width, height):
         current_rect = pygame.Rect(self.x - self.hitbox_radius, self.y - self.hitbox_radius, self.hitbox_radius * 2, self.hitbox_radius * 2)
@@ -75,6 +110,11 @@ class Player:
             if self.y + self.radius > height: self.y = height - self.radius; self.vy = 0
 
     def take_damage_and_knockback(self, damage, source_x, source_y, force, width, height, mode_name):
+        # Chặn lực văng (knockback) nếu đang trong trạng thái bất tử
+        if pygame.time.get_ticks() < self.invincible_until:
+            return
+
+        # Việc gán self.health ở đây sẽ tự động kích hoạt bộ lọc @health.setter ở trên
         self.health = max(0.0, self.health - damage)
         
         dx = self.x - source_x
@@ -113,9 +153,9 @@ class Player:
     def update_lava_logic(self, dt):
         """Hàm xử lý trừ máu liên tục và mượt mà khi đứng trong Lava"""
         if self.in_lava:
-            # 45.0 có nghĩa là mất 45 máu trong 1 giây dẫm ô dung nham.
-            # Bạn có thể nâng lên 60.0 hoặc 80.0 nếu muốn người chơi "bốc hơi" nhanh hơn nữa.
             damage_per_second = 45.0 
+            # Cứ mỗi frame bị trừ 1 xíu máu (vd: 0.75 máu). Vì bé hơn 5 nên sẽ không bị kích hoạt bất tử
+            # Nhưng nếu đang bất tử sẵn thì nó sẽ không trừ
             self.health -= damage_per_second * dt
             
             if self.health < 0:
@@ -144,11 +184,21 @@ class Player:
 
         final_draw_y = int(draw_y + visual_bob_y)
         
-        pygame.draw.circle(screen, BLACK, (int(draw_x) + 2, final_draw_y + 3), self.radius)
-        pygame.draw.circle(screen, player_color, (int(draw_x), final_draw_y), self.radius)
-        pygame.draw.circle(screen, player_border_color, (int(draw_x), final_draw_y), self.radius, width=3)
-        pygame.draw.circle(screen, WHITE, (int(draw_x - 6), final_draw_y - 6), 5)
+        # --- KIỂM TRA TRẠNG THÁI BẤT TỬ ĐỂ TẠO HIỆU ỨNG NHẤP NHÁY ---
+        is_invincible = pygame.time.get_ticks() < self.invincible_until
+        show_player = True
+        
+        # Nếu đang bất tử, nhấp nháy (chớp tắt) mỗi 50ms
+        if is_invincible and (pygame.time.get_ticks() // 50) % 2 == 0:
+            show_player = False
 
+        if show_player:
+            pygame.draw.circle(screen, BLACK, (int(draw_x) + 2, final_draw_y + 3), self.radius)
+            pygame.draw.circle(screen, player_color, (int(draw_x), final_draw_y), self.radius)
+            pygame.draw.circle(screen, player_border_color, (int(draw_x), final_draw_y), self.radius, width=3)
+            pygame.draw.circle(screen, WHITE, (int(draw_x - 6), final_draw_y - 6), 5)
+
+        # Mặc dù nhấp nháy tàng hình, gợn sóng nước vẫn vẽ bình thường
         if self.in_water:
             light_blue, dark_blue = (210, 240, 255), (60, 120, 220)
             t = pygame.time.get_ticks() / 150.0
