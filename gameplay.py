@@ -902,7 +902,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         # Chỉ áp dụng Buff Kill nếu người chơi thực sự lấy thẻ Buff Dame
         damage_multiplier = 1.0 + (0.3 * player_buffs['dame'])
         if player_buffs['dame'] > 0:
-            damage_multiplier += (player.dame_buff_kills * 0.0075) # Cộng 0.75% sát thương mỗi mạng
+            damage_multiplier += (player.dame_buff_kills * 0.0025) # Cộng 0.75% sát thương mỗi mạng
 
         click_x, click_y = -1, -1
         for event in pygame.event.get():
