@@ -570,13 +570,13 @@ def get_wave_enemies(mode_name, wave_num):
 
 BUFF_TYPES = ['dame', 'health', 'speed', 'kaboom', 'x2', 'coin', 'shield', 'magic']
 BUFF_DESCS = {
-    'dame': "+30% Dmg/lv, +0.75%/Kill",
+    'dame': "+30% Dmg/lv, +0.25%/Kill",
     'health': "+50 Max HP and Regen",
     'speed': "+Move Speed, -Weapon CD",
     'kaboom': "Throws trigger Explosion",
     'x2': "Multiply orbit weapons",
     'coin': "+50% Score gained",
-    'shield': "+50 Shield, +5% Dmg Resist",
+    'shield': "+50 Shield, Lv2+: Spikes knockback",
     'magic': "Magic orbs orbit & slow enemies"
 }
 
@@ -843,13 +843,13 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         grasses = [pygame.Rect(x, y, grass_w, grass_h) for x,y in [(10, 300), (WIDTH - grass_w - 10, 300)]]
     elif mode_name == 'HARD':
         rocks = [pygame.Rect(x, y, rock_w, rock_h) for x,y in [(120, 80), (360, 140), (200, 260), (60, 500)]]
-        trees = [pygame.Rect(x, y, tree_w, tree_h) for x,y in [(10, 190), (150, 320), (300, 350), (380, 420)]]
+        trees = [pygame.Rect(x, y, tree_w, tree_h) for x,y in [(10, 190), (300, 350), (380, 420)]]
 
     all_obstacles = dirts + rocks + trees
     player = Player(WIDTH // 2, HEIGHT // 2)
     player.kaboom_level = 0
     player.total_kills = 0
-    player.dame_buff_kills = 0 # --- BIẾN ĐẾM KILLS SAU KHI CÓ BUFF DAME ---
+    player.dame_buff_kills = 0 
     
     def get_weapon_image():
         path = f"weapon/{weapon.SELECTED_WEAPON}.png"
@@ -898,11 +898,10 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         camera_x, camera_y = (int(player.x) - WIDTH // 2, int(player.y) - HEIGHT // 2) if mode_name == 'ENDLESS' else (0, 0)
         current_time = pygame.time.get_ticks()
         
-        # --- HỆ SỐ SÁT THƯƠNG SIÊU KHỦNG ---
-        # Chỉ áp dụng Buff Kill nếu người chơi thực sự lấy thẻ Buff Dame
+        # --- HỆ SỐ SÁT THƯƠNG ---
         damage_multiplier = 1.0 + (0.3 * player_buffs['dame'])
         if player_buffs['dame'] > 0:
-            damage_multiplier += (player.dame_buff_kills * 0.0025) # Cộng 0.75% sát thương mỗi mạng
+            damage_multiplier += (player.dame_buff_kills * 0.0025) # GIẢM XUỐNG CÒN 0.25% sát thương mỗi mạng
 
         click_x, click_y = -1, -1
         for event in pygame.event.get():
@@ -938,7 +937,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         # --- XỬ LÝ CƠ CHẾ KABOOM NÉM VŨ KHÍ ---
                         if player_buffs['kaboom'] > 0:
                             kaboom_throws += 1
-                            # CẤP 1 cần 7 lần (8-1), CẤP 2 cần 6 (8-2), CẤP 3 cần 5 (8-3)
                             required_throws = max(2, 8 - player_buffs['kaboom'])
                             if kaboom_throws >= required_throws:
                                 kaboom_throws = 0
@@ -1030,7 +1028,16 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         for enemy in active_enemies: 
             dmg_taken = enemy.update(player, dt, WIDTH, HEIGHT, mode_name, player_buffs['shield'], enemy_projectiles, current_obstacles)
             if dmg_taken > 0:
-                if shield_hp > 0: shield_hp -= dmg_taken
+                if shield_hp > 0: 
+                    shield_hp -= dmg_taken
+                    # --- NẾU SHIELD LV >= 2, ĐẨY LÙI KẺ ĐỊCH GẦN (PHẢN ĐÒN GAI) ---
+                    if player_buffs['shield'] >= 2:
+                        for e in active_enemies:
+                            dist = math.hypot(e.x - player.x, e.y - player.y)
+                            if dist < 120:  # Tầm tác dụng đẩy lùi
+                                if dist > 0:
+                                    e.x += ((e.x - player.x) / dist) * 35
+                                    e.y += ((e.y - player.y) / dist) * 35
                 else: 
                     player.take_damage_and_knockback(dmg_taken, enemy.x, enemy.y, 10, WIDTH, HEIGHT, mode_name)
 
@@ -1206,7 +1213,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         
                 if is_dead or enemy.health <= 0:
                     player.total_kills += 1
-                    # --- NẾU ĐÃ LẤY ĐƯỢC BUFF DAME MỚI BẮT ĐẦU TÍNH KILLS CỘNG DỒN ---
                     if player_buffs['dame'] > 0:
                         player.dame_buff_kills += 1
                         
@@ -1283,6 +1289,33 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             pygame.draw.circle(poison_flash, (0, 255, 0, 100), (player.radius*1.25, player.radius*1.25), player.radius*1.25)
             screen.blit(poison_flash, (draw_player_x - player.radius*1.25, draw_player_y - player.radius*1.25))
 
+        # --- VẼ BÓNG SHIELD & GAI BẢO VỆ (NẾU CÒN GIÁP) ---
+        if shield_hp > 0:
+            shield_surf = pygame.Surface((player.radius * 4, player.radius * 4), pygame.SRCALPHA)
+            center_s = player.radius * 2
+            
+            # Bóng mờ màu xanh dương trong suốt
+            pygame.draw.circle(shield_surf, (50, 150, 255, 70), (center_s, center_s), player.radius * 1.4)
+            pygame.draw.circle(shield_surf, (100, 200, 255, 150), (center_s, center_s), player.radius * 1.4, 2)
+            
+            # Gai đẩy lùi nếu level >= 2
+            if player_buffs['shield'] >= 2:
+                num_spikes = 6 + player_buffs['shield'] * 2
+                t = current_time / 500.0
+                for i in range(num_spikes):
+                    angle = t + i * (2 * math.pi / num_spikes)
+                    inner_r = player.radius * 1.4
+                    outer_r = player.radius * 1.8
+                    x1 = center_s + math.cos(angle - 0.15) * inner_r
+                    y1 = center_s + math.sin(angle - 0.15) * inner_r
+                    x2 = center_s + math.cos(angle + 0.15) * inner_r
+                    y2 = center_s + math.sin(angle + 0.15) * inner_r
+                    x3 = center_s + math.cos(angle) * outer_r
+                    y3 = center_s + math.sin(angle) * outer_r
+                    pygame.draw.polygon(shield_surf, (100, 200, 255, 180), [(x1,y1), (x2,y2), (x3,y3)])
+                    
+            screen.blit(shield_surf, (draw_player_x - center_s, draw_player_y - center_s))
+
         for pw in player_weapons: pw.draw(screen, camera_x, camera_y)
         player_special.draw(screen, camera_x, camera_y)
         
@@ -1311,10 +1344,10 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     text_obj = lvl_font.render(str(b_lvl), True, WHITE)
                     screen.blit(text_obj, text_obj.get_rect(center=(buff_start_x + 32, buff_y)))
                     
-                    # --- HIỂN THỊ CHÍNH XÁC PHẦN TRĂM DAME CỘNG THÊM ---
+                    # CẬP NHẬT HIỂN THỊ CHÍNH XÁC PHẦN TRĂM DAME CỘNG THÊM XUỐNG 0.25%
                     if b_name == 'dame':
                         kill_font = pygame.font.SysFont(None, 15, bold=True)
-                        bonus_pct = player.dame_buff_kills * 0.75 # 0.75% mỗi mạng
+                        bonus_pct = player.dame_buff_kills * 0.25 
                         kill_text = kill_font.render(f"+{bonus_pct:g}%", True, (255, 200, 50))
                         
                         text_rect = kill_text.get_rect(midtop=(buff_start_x + 16, buff_y + 35))
