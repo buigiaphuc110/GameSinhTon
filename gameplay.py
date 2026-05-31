@@ -64,7 +64,7 @@ class DangerExplosion:
         self.x, self.y, self.alarm_img, self.frames = x, y, alarm_img, explosion_frames
         self.state, self.start_timer, self.warning_duration = "WARNING", pygame.time.get_ticks(), 1500
         self.frame_index, self.frame_rate, self.last_frame_time = 0, 50, pygame.time.get_ticks()
-        self.has_dealt_damage, self.hitbox_radius = False, 110 # GIẢM từ 130 xuống 110 để AoE vụ nổ sát rìa không bị dính oan
+        self.has_dealt_damage, self.hitbox_radius = False, 130 
 
     def update(self, player, width, height, mode_name, player_shield=0):
         current_time = pygame.time.get_ticks()
@@ -97,7 +97,7 @@ class DangerExplosion:
 class LavaPool:
     def __init__(self, x, y, lava_img, shadow_image=None):
         self.x, self.y, self.image, self.shadow_image = x, y, lava_img, shadow_image
-        self.state, self.radius = "ACTIVE", int(110 / 2.6) # SỬA ĐỔI: Bóp nhỏ bán kính vùng nham thạch để tránh dẫm rìa ngoài suốt
+        self.state, self.radius = "ACTIVE", int(110 / 2.25) 
 
     def update(self, camera_x, camera_y, width, height):
         if not is_on_screen(self.x, self.y, camera_x, camera_y, width, height, buffer=200): self.state = "DONE"
@@ -111,13 +111,8 @@ class LavaPool:
 class EndlessEntity:
     def __init__(self, x, y, image, type_name, shadow_image=None):
         self.x, self.y, self.type_name, self.image, self.shadow_image = x, y, type_name, image, shadow_image
-        
-        # SỬA ĐỔI CHÍNH: Thu nhỏ rect va chạm (Chướng ngại vật/Cây cối) vào trong 35% để loại bỏ phần ảnh trong suốt xung quanh
-        original_rect = self.image.get_rect(center=(x, y))
-        self.rect = original_rect.inflate(-original_rect.width * 0.35, -original_rect.height * 0.35)
-        
-        # Đồng thời thu nhỏ bán kính vòng tròn va chạm xuống còn 65% kích thước thật của ảnh
-        self.radius = int((max(original_rect.width, original_rect.height) // 2) * 0.65)
+        self.rect = self.image.get_rect(center=(x, y))
+        self.radius = max(self.rect.width, self.rect.height) // 2
         self.state = "ACTIVE"
 
     def update(self, camera_x, camera_y, width, height):
@@ -130,12 +125,9 @@ class EndlessEntity:
                 alpha_val = max(0, min(255, int(20 + 2 * math.sin(pygame.time.get_ticks() / 200.0))))
                 draw_img = self.shadow_image.copy()
                 draw_img.fill((255, 255, 255, alpha_val), special_flags=pygame.BLEND_RGBA_MULT)
-            # Tính toán vị trí dựa theo chiều cao gốc của ảnh
-            orig_h = self.image.get_height()
-            screen.blit(draw_img, draw_img.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y + orig_h//3))))
+            screen.blit(draw_img, draw_img.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y + self.rect.height//3))))
 
     def draw(self, screen, camera_x, camera_y):
-        # Hàm vẽ vẫn lấy ảnh gốc vẽ đúng tâm để hiển thị đẹp mắt, nhưng khi kiểm tra va chạm bằng self.rect nó sẽ nhỏ gọn hơn hẳn
         screen.blit(self.image, self.image.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y))))
 
 
@@ -150,7 +142,7 @@ class PoisonBullet:
         speed = 8.0
         self.vx = (dx / dist) * speed if dist > 0 else speed
         self.vy = (dy / dist) * speed if dist > 0 else 0
-        self.radius, self.life = 6, 100 # GIẢM bán kính va chạm đạn độc từ 8 xuống 6 để né mượt hơn
+        self.radius, self.life = 8, 100
 
     def update(self):
         self.x += self.vx
@@ -171,7 +163,7 @@ class ChainProjectile:
         dist = math.hypot(dx, dy)
         self.vx = (dx / dist) * 15 if dist > 0 else 0
         self.vy = (dy / dist) * 15 if dist > 0 else 0
-        self.radius, self.life = 6, 45 # GIẢM từ 8 xuống 6
+        self.radius, self.life = 8, 45
 
     def update(self):
         self.x += self.vx
@@ -191,7 +183,7 @@ class CannonballProjectile:
         dist = math.hypot(dx, dy)
         self.vx = (dx / dist) * 4.5 if dist > 0 else 0
         self.vy = (dy / dist) * 4.5 if dist > 0 else 0
-        self.radius, self.life = 11, 120 # GIẢM bán kính đạn đại bác từ 14 xuống 11
+        self.radius, self.life = 14, 120
 
     def update(self):
         self.x += self.vx
@@ -215,20 +207,13 @@ class EnemyNor:
         self.frame_index, self.frame_rate, self.last_frame_time = 0, 100, pygame.time.get_ticks()
         
         stat_mult = 1.0 + max(0, (wave - 3) // 2) * 0.20 if wave >= 5 else 1.0
-        self.speed = 35 * stat_mult
+        
+        self.speed, self.radius = 35 * stat_mult, 20 
         self.damage_cooldown, self.last_damage_time = 1000, 0
         self.angle, self.max_health = 0, int(100 * stat_mult)
         self.health, self.base_damage = self.max_health, int(5 * stat_mult)
         self.score_value = 10
-        
-        # SỬA ĐỔI CHÍNH: Co hẹp hitbox chữ nhật và hitbox tròn của quái thường đi 30% để vũ khí ném xuyên rìa không bị tính chạm hụt
-        if self.frames:
-            w, h = self.frames[0].get_width(), self.frames[0].get_height()
-            self.rect = pygame.Rect(0, 0, w, h).inflate(-w * 0.3, -h * 0.3)
-            self.radius = int(min(self.rect.width, self.rect.height) // 2 * 0.9)
-        else:
-            self.rect = pygame.Rect(0, 0, 32, 32)
-            self.radius = 14
+        self.rect = pygame.Rect(0, 0, self.frames[0].get_width(), self.frames[0].get_height()) if self.frames else pygame.Rect(0, 0, 32, 32)
 
     def take_damage(self, amount):
         self.health = max(0, self.health - amount)
@@ -273,19 +258,11 @@ class EnemyNorBig(EnemyNor):
         self.frames = [pygame.transform.scale(f, (f.get_width() * 2, f.get_height() * 2)) for f in self.frames]
         
         stat_mult = 1.0 + max(0, (wave - 3) // 2) * 0.20 if wave >= 5 else 1.0
-        self.speed = 45 * stat_mult
+        self.speed, self.radius = 45 * stat_mult, 60 / 1.4 
         self.max_health = int(300 * stat_mult)
         self.health, self.base_damage = self.max_health, int(15 * stat_mult)
         self.score_value = 30
-        
-        # SỬA ĐỔI CHÍNH: Co hẹp hitbox chữ nhật và tròn của Quái To bớt 35%
-        if self.frames:
-            w, h = self.frames[0].get_width(), self.frames[0].get_height()
-            self.rect = pygame.Rect(0, 0, w, h).inflate(-w * 0.35, -h * 0.35)
-            self.radius = int(min(self.rect.width, self.rect.height) // 2 * 0.9)
-        else:
-            self.rect = pygame.Rect(0, 0, 64, 64)
-            self.radius = 28
+        self.rect = pygame.Rect(0, 0, self.frames[0].get_size()[0], self.frames[0].get_size()[1]) if self.frames else pygame.Rect(0, 0, 64, 64)
 
     def draw(self, screen, camera_x, camera_y):
         super().draw(screen, camera_x, camera_y)
@@ -419,11 +396,9 @@ class EnemyShip:
         self.fire_rate = 3500
         self.last_shot_time = pygame.time.get_ticks()
         
-        # SỬA ĐỔI CHÍNH: Thu nhỏ rect va chạm của Tàu quái để không bị kẹt hay chạm ảo từ xa
-        self.rect = pygame.Rect(0, 0, 80, 80).inflate(-26, -26)
-        self.radius = 22 # GIẢM từ 30 xuống 22
-        
+        self.radius = 30
         self.angle = 0
+        self.rect = pygame.Rect(0, 0, 80, 80)
         self.damage_cooldown = 1000
         self.last_damage_time = 0
         self.base_damage = int(15 * stat_mult)
@@ -440,13 +415,11 @@ class EnemyShip:
             nx = self.x + (dx / dist) * self.speed * dt
             ny = self.y + (dy / dist) * self.speed * dt
             
-            # Khởi tạo một dummy_rect nhỏ gọn theo rect đã inflate để dò đường đi tránh vật thể mượt hơn
             dummy_rect = self.rect.copy()
             dummy_rect.center = (int(nx), int(ny))
             hit_obstacle = False
             if all_obstacles:
-                # Kiểm tra va chạm với các rect chướng ngại vật đã được thu nhỏ ở EndlessEntity
-                hit_obstacle = any(dummy_rect.colliderect(obs.rect) if hasattr(obs, 'rect') else dummy_rect.colliderect(obs) for obs in all_obstacles)
+                hit_obstacle = any(dummy_rect.colliderect(obs) for obs in all_obstacles)
                 
             if not hit_obstacle and dist > 150:
                 if 40 < nx < width - 40 and 40 < ny < height - 40:
@@ -456,9 +429,9 @@ class EnemyShip:
             self.angle = math.degrees(math.atan2(-dy, dx))
             
         self.rect.center = (int(self.x), int(self.y))
+        
         current_time = pygame.time.get_ticks()
 
-        # Pháo nổ AoE
         if dist < 650 and current_time - self.last_shot_time > self.fire_rate:
             active_projectiles.append(CannonballProjectile(self.x, self.y, player.x, player.y))
             self.last_shot_time = current_time
@@ -494,7 +467,7 @@ class OrangeExplosion:
         self.radius += (self.max_radius - self.radius) * 0.15 + 2
         self.life -= 12
         if self.radius >= self.max_radius * 0.75 and self.life > 0 and not self.has_dealt_damage:
-            if math.hypot(player.x - self.x, player.y - self.y) < self.max_radius * 0.85: # SỬA ĐỔI: Thu nhỏ bán kính nổ
+            if math.hypot(player.x - self.x, player.y - self.y) < self.max_radius:
                 self.has_dealt_damage = True
                 return True 
         return False
@@ -517,6 +490,7 @@ class KaboomExplosion:
             
         self.life = 255
         self.level = level
+        
         base_damage = 75 + (level * 12)
         self.damage = base_damage * multiplier
         self.has_dealt_damage = False
@@ -528,7 +502,7 @@ class KaboomExplosion:
             self.has_dealt_damage = True
             for e in enemies:
                 dist = math.hypot(e.x - self.x, e.y - self.y)
-                if self.max_radius >= 999999 or dist < self.max_radius * 0.9: # SỬA ĐỔI: Sát thương nổ bám sát hiệu ứng mắt nhìn hơn
+                if self.max_radius >= 999999 or dist < self.max_radius:
                     e.take_damage(self.damage)
                     if dist > 0 and self.max_radius < 999999:
                         e.x += ((e.x - self.x) / dist) * 40
@@ -547,17 +521,17 @@ class KaboomExplosion:
                 pygame.draw.circle(surf, (255, 255, 200, max(0, self.life)), (self.max_radius, self.max_radius), int(self.radius), 3)
                 screen.blit(surf, (int(self.x - camera_x - self.max_radius), int(self.y - camera_y - self.max_radius)))
 
-
 # ==========================================
 # CÁC KỸ NĂNG TỪ BUFF
 # ==========================================
 class MagicOrb:
     def __init__(self):
-        self.angle, self.radius, self.base_damage = 0, 120, 10 
+        self.angle, self.radius, self.base_damage = 0, 120, 10
 
     def update_and_draw(self, player, enemies, screen, cx, cy, level, dmg_multiplier):
         if level <= 0: return
         self.angle = (self.angle + 4 + level*2) % 360
+        
         final_damage = (self.base_damage * level) * dmg_multiplier
         
         for i in range(level):
@@ -565,13 +539,11 @@ class MagicOrb:
             ox = player.x + math.cos(math.radians(offset_angle)) * self.radius
             oy = player.y + math.sin(math.radians(offset_angle)) * self.radius
             
-            orb_radius = 12 + level * 2
-            pygame.draw.circle(screen, (150, 50, 255), (int(ox - cx), int(oy - cy)), orb_radius)
+            pygame.draw.circle(screen, (150, 50, 255), (int(ox - cx), int(oy - cy)), 12 + level*2)
             pygame.draw.circle(screen, (200, 150, 255), (int(ox - cx), int(oy - cy)), 6 + level)
-            
+
             for e in enemies:
-                # SỬA ĐỔI: Tính va chạm linh hoạt dựa trên kích thước thực của từng loại quái e.radius thay vì gán cứng < 30
-                if math.hypot(e.x - ox, e.y - oy) < (orb_radius + e.radius):
+                if math.hypot(e.x - ox, e.y - oy) < 30:
                     e.take_damage(final_damage)
                     e.speed = max(10, e.speed - 15)
 
@@ -597,7 +569,7 @@ BUFF_TYPES = ['dame', 'health', 'speed', 'kaboom', 'x2', 'coin', 'shield', 'magi
 BUFF_DESCS = {
     'dame': "+30% Dmg/lv, +0.25%/Kill",
     'health': "+50 Max HP and Regen",
-    'speed': "+Move Speed, -Weapon CD",
+    'speed': "+Move Spd, Gun ++Bullets, -CD",
     'kaboom': "Throws trigger Explosion",
     'x2': "Multiply orbit weapons",
     'coin': "+50% Score gained",
@@ -610,17 +582,16 @@ def draw_buff_card(screen, font, title, desc, rect, is_hover, level, buff_images
     shape_surf = pygame.Surface(card_rect.size, pygame.SRCALPHA)
     pygame.draw.rect(shape_surf, (40, 40, 60, 230), shape_surf.get_rect(), border_radius=15)
     
-    # --- CẬP NHẬT MÀU SẮC VIỀN THEO LEVEL ---
     if level == 0:
-        border_col = (200, 200, 200) # Trắng bạc (Lv0 -> Lv1)
+        border_col = (200, 200, 200) 
         glow_col = (200, 200, 200, 60)
         title_col = (255, 255, 255) if is_hover else (200, 200, 200)
     elif level == 1:
-        border_col = (255, 215, 0) # Vàng Kim (Lv1 -> Lv2)
+        border_col = (255, 215, 0) 
         glow_col = (255, 215, 0, 60)
         title_col = (255, 215, 0) if is_hover else (200, 180, 0)
     else:
-        border_col = (0, 255, 255) # Kim Cương Xanh (Lv2 -> Lv3)
+        border_col = (0, 255, 255) 
         glow_col = (0, 255, 255, 60)
         title_col = (0, 255, 255) if is_hover else (0, 200, 200)
     
@@ -635,7 +606,6 @@ def draw_buff_card(screen, font, title, desc, rect, is_hover, level, buff_images
         
     screen.blit(shape_surf, card_rect.topleft)
     draw_text_with_shadow(title.upper(), font, title_col, screen, card_rect.centerx, card_rect.y + 30)
-    
     draw_text_with_shadow(f"Lv: {level} -> {level+1}", font, border_col, screen, card_rect.centerx, card_rect.y + 60)
     
     if title in buff_images and buff_images[title]:
@@ -815,9 +785,6 @@ def load_game_entities(game_assets):
 
 # --- MAIN LOOP ---
 def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mode_name, ground_key):
-    # ==========================
-    # KHỞI TẠO ÂM THANH (SOUND)
-    # ==========================
     pygame.mixer.init()
     if 'sfx' not in game_assets:
         game_assets['sfx'] = {}
@@ -868,7 +835,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         grasses = [pygame.Rect(x, y, grass_w, grass_h) for x,y in [(10, 300), (WIDTH - grass_w - 10, 300)]]
     elif mode_name == 'HARD':
         rocks = [pygame.Rect(x, y, rock_w, rock_h) for x,y in [(120, 80), (360, 140), (200, 260), (60, 500)]]
-        trees = [pygame.Rect(x, y, tree_w, tree_h) for x,y in [(10, 190), (300, 350), (380, 420)]]
+        trees = [pygame.Rect(x, y, tree_w, tree_h) for x,y in [(10, 190), (150, 320), (300, 350), (380, 420)]]
 
     all_obstacles = dirts + rocks + trees
     player = Player(WIDTH // 2, HEIGHT // 2)
@@ -912,6 +879,8 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
     kaboom_throws = 0
     orange_explosions = []
     kaboom_explosions = []
+    player_extra_bullets = [] 
+    active_weapon_explosions = [] 
     magic_orb = MagicOrb()
     
     weapon_cooldown_timer = 0
@@ -923,12 +892,15 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         camera_x, camera_y = (int(player.x) - WIDTH // 2, int(player.y) - HEIGHT // 2) if mode_name == 'ENDLESS' else (0, 0)
         current_time = pygame.time.get_ticks()
         
-        # --- HỆ SỐ SÁT THƯƠNG ---
         damage_multiplier = 1.0 + (0.3 * player_buffs['dame'])
         if player_buffs['dame'] > 0:
-            damage_multiplier += (player.dame_buff_kills * 0.0025) # GIẢM XUỐNG CÒN 0.25% sát thương mỗi mạng
+            damage_multiplier += (player.dame_buff_kills * 0.0025)
 
+        is_gun = (weapon.SELECTED_WEAPON == 'gun')
+        trigger_shoot = False
+        target_x, target_y = 0, 0
         click_x, click_y = -1, -1
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
                 pygame.quit()
@@ -937,29 +909,56 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 running = False
                 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if game_state == "PLAYING" and current_time - weapon_cooldown_timer > max(50, 300 - player_buffs['speed']*60):
+                if game_state == "PLAYING":
+                    trigger_shoot = True
                     mx, my = pygame.mouse.get_pos()
                     target_x, target_y = mx + camera_x, my + camera_y
-                    
-                    is_special = player_special.on_player_throw_weapon(weapon.SELECTED_WEAPON, target_x, target_y, player.x, player.y)
-                    if not is_special:
-                        spread_angles = [0, -15, 15, -30, 30, -45, 45]
-                        orbiting_weapons = [pw for pw in player_weapons if pw.state == 'orbit']
+                elif game_state == "CHOOSING_BUFF":
+                    click_x, click_y = pygame.mouse.get_pos()
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3 and game_state == "PLAYING":
+                player_special.trigger_random_skill()
+
+        if trigger_shoot and game_state == "PLAYING":
+            # --- CƠ CHẾ BẮN VÀ COOLDOWN ---
+            # Với Gun, Cooldown gốc là 300ms, không bị giảm bởi speed nữa vì speed dùng để tăng số đạn bắn liên tiếp (Burst)
+            req_cd = 300 if is_gun else max(50, 300 - player_buffs['speed']*60)
+            
+            if current_time - weapon_cooldown_timer > req_cd:
+                is_special = player_special.on_player_throw_weapon(weapon.SELECTED_WEAPON, target_x, target_y, player.x, player.y)
+                if not is_special:
+                    if is_gun:
+                        base_angle = math.atan2(target_y - player.y, target_x - player.x)
+                        num_bullets = 1 + player_buffs['speed']  # Số đạn bắn liên tiếp mỗi loạt
+                        target_weapon_count = 1 + player_buffs['x2'] # Số nòng súng (bắn song song)
+                        muzzle_radius = 65 
                         
-                        for i, pw in enumerate(orbiting_weapons):
-                            spread = spread_angles[i] if i < len(spread_angles) else random.randint(-30, 30)
-                            dx, dy = target_x - player.x, target_y - player.y
-                            angle_rad = math.radians(spread)
-                            nx = dx * math.cos(angle_rad) - dy * math.sin(angle_rad)
-                            ny = dx * math.sin(angle_rad) + dy * math.cos(angle_rad)
-                            pw.throw(player.x + nx, player.y + ny, player.x, player.y)
-                        
+                        # Truyền tín hiệu giật súng
+                        for pw in player_weapons:
+                            if pw.state == 'orbit':
+                                pw.recoil_timer = 10
+                                pw.shoot_angle = base_angle
+                                
+                        # Bắn từ tất cả các nòng súng (Buff X2)
+                        for b_idx in range(target_weapon_count):
+                            offset_ang = base_angle + math.pi/2
+                            offset_dist = (b_idx - (target_weapon_count - 1) / 2.0) * 18 
+                            muzzle_x = player.x + math.cos(base_angle) * muzzle_radius + math.cos(offset_ang) * offset_dist
+                            muzzle_y = player.y + math.sin(base_angle) * muzzle_radius + math.sin(offset_ang) * offset_dist
+                            
+                            # CƠ CHẾ BURST FIRE: Bắn liên tiếp nhiều viên (Buff Speed)
+                            for i in range(num_bullets):
+                                player_extra_bullets.append({
+                                    'x': muzzle_x, 'y': muzzle_y,
+                                    'vx': math.cos(base_angle) * 30,
+                                    'vy': math.sin(base_angle) * 30,
+                                    'life': 30,
+                                    'delay': i * 5 # Độ trễ 5 frames giữa mỗi viên để thành chuỗi đạn bay
+                                })
+                                
                         weapon_cooldown_timer = current_time
+                        play_cached_sfx('gunsound')
                         
-                        if weapon.SELECTED_WEAPON in ['flower', 'gun']:
-                            play_cached_sfx(f"{weapon.SELECTED_WEAPON}sound")
-                        
-                        # --- XỬ LÝ CƠ CHẾ KABOOM NÉM VŨ KHÍ ---
                         if player_buffs['kaboom'] > 0:
                             kaboom_throws += 1
                             required_throws = max(2, 8 - player_buffs['kaboom'])
@@ -967,12 +966,29 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                                 kaboom_throws = 0
                                 play_cached_sfx('tanksound')
                                 kaboom_explosions.append(KaboomExplosion(player.x, player.y, player_buffs['kaboom'], damage_multiplier))
-
-                elif game_state == "CHOOSING_BUFF":
-                    click_x, click_y = pygame.mouse.get_pos()
-
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3 and game_state == "PLAYING":
-                player_special.trigger_random_skill()
+                    else:
+                        orbiting_weapons = [pw for pw in player_weapons if pw.state == 'orbit']
+                        if orbiting_weapons:
+                            spread_angles = [0, -15, 15, -30, 30, -45, 45]
+                            for i, pw in enumerate(orbiting_weapons):
+                                spread = spread_angles[i] if i < len(spread_angles) else random.randint(-30, 30)
+                                dx, dy = target_x - player.x, target_y - player.y
+                                angle_rad = math.radians(spread)
+                                nx = dx * math.cos(angle_rad) - dy * math.sin(angle_rad)
+                                ny = dx * math.sin(angle_rad) + dy * math.cos(angle_rad)
+                                pw.throw(player.x + nx, player.y + ny, player.x, player.y)
+                            
+                            weapon_cooldown_timer = current_time
+                            if weapon.SELECTED_WEAPON == 'flower': play_cached_sfx('flowersound')
+                            elif weapon.SELECTED_WEAPON == 'sword': play_cached_sfx('swordsound')
+                            
+                            if player_buffs['kaboom'] > 0:
+                                kaboom_throws += 1
+                                required_throws = max(2, 8 - player_buffs['kaboom'])
+                                if kaboom_throws >= required_throws:
+                                    kaboom_throws = 0
+                                    play_cached_sfx('tanksound')
+                                    kaboom_explosions.append(KaboomExplosion(player.x, player.y, player_buffs['kaboom'], damage_multiplier))
 
         if not player.update_environment_logic(mode_name, WIDTH, HEIGHT):
             player.health = 0.0
@@ -1055,11 +1071,10 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             if dmg_taken > 0:
                 if shield_hp > 0: 
                     shield_hp -= dmg_taken
-                    # --- NẾU SHIELD LV >= 2, ĐẨY LÙI KẺ ĐỊCH GẦN (PHẢN ĐÒN GAI) ---
                     if player_buffs['shield'] >= 2:
                         for e in active_enemies:
                             dist = math.hypot(e.x - player.x, e.y - player.y)
-                            if dist < 120:  # Tầm tác dụng đẩy lùi
+                            if dist < 120: 
                                 if dist > 0:
                                     e.x += ((e.x - player.x) / dist) * 35
                                     e.y += ((e.y - player.y) / dist) * 35
@@ -1096,57 +1111,62 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     player_last_poison_tick = current_time
                     if proj in enemy_projectiles: enemy_projectiles.remove(proj)
 
-        if mode_name == 'MEDIUM':
-            if game_state == "PLAYING":
-                danger_spawn_timer -= dt
-                if danger_spawn_timer <= 0:
-                    roll = random.random()
-                    spawn_count = 5 if roll < 0.05 else (2 if roll < 0.45 else 1)
-                    for _ in range(spawn_count):
-                        active_dangers.append(DangerExplosion(random.randint(50, WIDTH - 50), random.randint(50, HEIGHT - 50), game_assets['alarm'], game_assets['explosion_frames']))
-                    danger_spawn_timer = 3.0 
-                
-                for danger in active_dangers[:]:
-                    dmg_taken = danger.update(player, WIDTH, HEIGHT, mode_name, player_buffs['shield'])
-                    if dmg_taken > 0:
-                        if shield_hp > 0: shield_hp -= dmg_taken
-                        else: 
-                            player.take_damage_and_knockback(dmg_taken, danger.x, danger.y, 25, WIDTH, HEIGHT, mode_name)
-                    if danger.state == "DONE": active_dangers.remove(danger)
-            else:
-                active_dangers.clear() 
-                
-        elif mode_name == 'ENDLESS':
-            player_in_lava = False
-            lavas_on_screen, ents_on_screen = 0, 0
-            
-            for lava in active_lavas[:]:
-                lava.update(camera_x, camera_y, WIDTH, HEIGHT)
-                if lava.state == "DONE": active_lavas.remove(lava); continue
-                if math.hypot(player.x - lava.x, player.y - lava.y) < lava.radius + player.radius: player_in_lava = True
-                if is_on_screen(lava.x, lava.y, camera_x, camera_y, WIDTH, HEIGHT, buffer=0): lavas_on_screen += 1
-            
-            for ent in active_endless_entities[:]:
-                ent.update(camera_x, camera_y, WIDTH, HEIGHT)
-                if ent.state == "DONE": active_endless_entities.remove(ent)
-                elif is_on_screen(ent.x, ent.y, camera_x, camera_y, WIDTH, HEIGHT, buffer=0): ents_on_screen += 1
-
-            if lavas_on_screen < 1: lava_spawn_timer -= dt
-            if ents_on_screen < 4 or (lavas_on_screen < 1 and lava_spawn_timer <= 0):
-                spawn_x, spawn_y = get_valid_spawn_pos(camera_x, camera_y, WIDTH, HEIGHT, player.x, player.y, active_endless_entities, active_lavas)
-                if lavas_on_screen < 1 and lava_spawn_timer <= 0:
-                    active_lavas.append(LavaPool(spawn_x, spawn_y, game_assets['lava'], game_assets.get('lava_shadow')))
-                    lava_spawn_timer = 8.0
-                elif ents_on_screen < 4:
-                    entity_types = ['driedtree', 'bone', 'skull', 'magma']
-                    chosen_type = random.choices(entity_types, weights=[35, 30, 20, 15], k=1)[0]
-                    active_endless_entities.append(EndlessEntity(spawn_x, spawn_y, game_assets[chosen_type], chosen_type, game_assets.get(f'{chosen_type}_shadow')))
-
-            player.in_lava = player_in_lava
-            player.update_lava_logic(dt)
-
-        weapon_colliders = current_obstacles
+        weapon_colliders = [obs.inflate(-35, -35) if isinstance(obs, pygame.Rect) else obs for obs in current_obstacles]
         
+        # --- CẬP NHẬT ĐẠN SÚNG & VA CHẠM (Có độ trễ Delay) ---
+        for b in player_extra_bullets[:]:
+            if b.get('delay', 0) > 0:
+                b['delay'] -= 1
+                continue
+                
+            b['x'] += b['vx']
+            b['y'] += b['vy']
+            b['life'] -= 1
+            
+            hit_something = False
+            
+            bullet_rect = pygame.Rect(0, 0, 10, 10)
+            bullet_rect.center = (int(b['x']), int(b['y']))
+            for obs in weapon_colliders:
+                obs_rect = obs.rect if hasattr(obs, 'rect') else obs
+                if isinstance(obs_rect, pygame.Rect) and bullet_rect.colliderect(obs_rect):
+                    hit_something = True
+                    break
+
+            if not hit_something:
+                for enemy in active_enemies[:]:
+                    if math.hypot(enemy.x - b['x'], enemy.y - b['y']) < enemy.radius + 8:
+                        is_dead = enemy.take_damage(18 * damage_multiplier)
+                        hit_something = True
+                        play_cached_sfx('hit')
+                        
+                        if is_dead or enemy.health <= 0:
+                            player.total_kills += 1
+                            if player_buffs['dame'] > 0:
+                                player.dame_buff_kills += 1
+                                
+                            if enemy.type == 'orange':
+                                orange_explosions.append(OrangeExplosion(enemy.x, enemy.y, current_wave))
+                            elif enemy.type == 'big' and current_wave >= 5:
+                                for _ in range(2):
+                                    rx = enemy.x + random.randint(-25, 25)
+                                    ry = enemy.y + random.randint(-25, 25)
+                                    active_enemies.append(EnemyNor(rx, ry, game_assets['nor_frames'], wave=current_wave))
+                                    
+                            if enemy in active_enemies: 
+                                active_enemies.remove(enemy)
+                            score_mult = 1.0 + (0.5 * player_buffs['coin'])
+                            score.game_score.add_points(int(enemy.score_value * score_mult))
+                        break
+                        
+            if hit_something or b['life'] <= 0:
+                active_weapon_explosions.append(weapon.WeaponExplosion(b['x'], b['y'], 'gun'))
+                player_extra_bullets.remove(b)
+
+        for wex in active_weapon_explosions[:]:
+            if not wex.update():
+                active_weapon_explosions.remove(wex)
+
         for pw in player_weapons:
             if not hasattr(pw, 'hit_targets'):
                 pw.hit_targets = set()
@@ -1182,19 +1202,24 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     if len(player_special.active_tanks) < max_tanks:
                         player_special.active_tanks.append(special.TankEntity(pw.x, pw.y, player_special))
 
+            orbit_hit_this_frame = False
+
             for enemy in active_enemies[:]:
                 is_dead = False
                 
-                if pw.state == 'thrown' and pw.rect.colliderect(enemy.rect) and enemy not in pw.hit_targets:
+                weapon_hit_radius = 22
+                dist_to_enemy = math.hypot(enemy.x - pw.x, enemy.y - pw.y)
+                
+                if pw.state == 'thrown' and dist_to_enemy < (enemy.radius + weapon_hit_radius) and enemy not in pw.hit_targets:
+                    # --- ĐÃ TĂNG DAME SWORD LÊN 50 ---
                     base_dmg = 40
                     if weapon.SELECTED_WEAPON == 'sword':
-                        base_dmg = 75
+                        base_dmg = 50 
                         play_cached_sfx('swordsound') 
                     elif weapon.SELECTED_WEAPON in ['bomb', 'bomb1', 'bomb2']:
                         base_dmg = 100
                         
                     is_dead = enemy.take_damage(base_dmg * damage_multiplier) 
-                    
                     pw.hit_targets.add(enemy) 
                     
                     if weapon.SELECTED_WEAPON != 'sword':
@@ -1214,7 +1239,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         elif weapon.SELECTED_WEAPON in ['bomb', 'bomb1', 'bomb2']:
                             for other_enemy in active_enemies:
                                 if other_enemy != enemy and math.hypot(other_enemy.x - pw.x, other_enemy.y - pw.y) < 150:
-                                    other_enemy.take_damage(90 * damage_multiplier)
+                                    other_enemy.take_damage(87 * damage_multiplier)
                         
                         if weapon.SELECTED_WEAPON == 'wrench':
                             max_tanks = 3 if player_buffs['speed'] >= 3 else 2
@@ -1225,16 +1250,12 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                             if getattr(pw, 'is_toxic', False): 
                                 player_special.particle_sys.spawn_bomb2_explosion(pw.x, pw.y)
                                 player_special.active_toxic_clouds.append(special.ToxicCloudEntity(pw.x, pw.y))
-                            
-                elif pw.state == 'shooting' and pw.active_bullet:
-                    bullet_rect = pygame.Rect(0, 0, 10, 10)
-                    bullet_rect.center = (int(pw.active_bullet['x']), int(pw.active_bullet['y']))
-                    if bullet_rect.colliderect(enemy.rect):
-                        is_dead = enemy.take_damage(30 * damage_multiplier) 
-                        pw.explosion = weapon.WeaponExplosion(pw.active_bullet['x'], pw.active_bullet['y'], 'gun')
-                        pw.active_bullet = None
-                        pw.state = 'orbit'
-                        play_cached_sfx('hit')
+                                
+                elif pw.state == 'orbit' and dist_to_enemy < (enemy.radius + weapon_hit_radius):
+                    if not hasattr(pw, 'last_orbit_hit_time'): pw.last_orbit_hit_time = 0
+                    if current_time - pw.last_orbit_hit_time > 400:
+                        is_dead = enemy.take_damage(15 * damage_multiplier)
+                        orbit_hit_this_frame = True
                         
                 if is_dead or enemy.health <= 0:
                     player.total_kills += 1
@@ -1253,6 +1274,9 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         active_enemies.remove(enemy)
                     score_mult = 1.0 + (0.5 * player_buffs['coin'])
                     score.game_score.add_points(int(enemy.score_value * score_mult))
+
+            if orbit_hit_this_frame:
+                pw.last_orbit_hit_time = current_time
 
         for ex in orange_explosions[:]:
             if ex.update(player):
@@ -1314,16 +1338,14 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             pygame.draw.circle(poison_flash, (0, 255, 0, 100), (player.radius*1.25, player.radius*1.25), player.radius*1.25)
             screen.blit(poison_flash, (draw_player_x - player.radius*1.25, draw_player_y - player.radius*1.25))
 
-        # --- VẼ BÓNG SHIELD & GAI BẢO VỆ (NẾU CÒN GIÁP) ---
+        # VẼ BÓNG SHIELD & GAI BẢO VỆ
         if shield_hp > 0:
             shield_surf = pygame.Surface((player.radius * 4, player.radius * 4), pygame.SRCALPHA)
             center_s = player.radius * 2
             
-            # Bóng mờ màu xanh dương trong suốt
             pygame.draw.circle(shield_surf, (50, 150, 255, 70), (center_s, center_s), player.radius * 1.4)
             pygame.draw.circle(shield_surf, (100, 200, 255, 150), (center_s, center_s), player.radius * 1.4, 2)
             
-            # Gai đẩy lùi nếu level >= 2
             if player_buffs['shield'] >= 2:
                 num_spikes = 6 + player_buffs['shield'] * 2
                 t = current_time / 500.0
@@ -1341,6 +1363,21 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     
             screen.blit(shield_surf, (draw_player_x - center_s, draw_player_y - center_s))
 
+        # VẼ ĐẠN CỦA SÚNG
+        for b in player_extra_bullets:
+            if b.get('delay', 0) > 0:
+                continue # Nếu đạn đang chờ delay burst thì chưa vẽ ra
+            bx = int(b['x'] - camera_x)
+            by = int(b['y'] - camera_y)
+            tracer_x = bx - b['vx'] * 0.5
+            tracer_y = by - b['vy'] * 0.5
+            pygame.draw.line(screen, (255, 200, 50), (tracer_x, tracer_y), (bx, by), 4)
+            pygame.draw.rect(screen, (255, 215, 0), (bx - 4, by - 4, 8, 8))
+            pygame.draw.rect(screen, (255, 255, 255), (bx - 2, by - 2, 4, 4))
+            
+        for wex in active_weapon_explosions:
+            wex.draw(screen, camera_x, camera_y)
+
         for pw in player_weapons: pw.draw(screen, camera_x, camera_y)
         player_special.draw(screen, camera_x, camera_y)
         
@@ -1352,7 +1389,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         draw_health_bar(screen, 20, 20, player.health, player.max_health, game_assets['font_level_diff'], shield_hp, 50 * player_buffs['shield'])
         score.game_score.draw_in_game(screen, game_assets['font_level_diff'], 20, 60)
         
-        # --- HUD BUFF ĐÃ CHỌN TRONG GAME ---
         buff_start_x = 20
         buff_y = 90
         for b_name, b_lvl in player_buffs.items():
@@ -1369,7 +1405,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     text_obj = lvl_font.render(str(b_lvl), True, WHITE)
                     screen.blit(text_obj, text_obj.get_rect(center=(buff_start_x + 32, buff_y)))
                     
-                    # CẬP NHẬT HIỂN THỊ CHÍNH XÁC PHẦN TRĂM DAME CỘNG THÊM XUỐNG 0.25%
                     if b_name == 'dame':
                         kill_font = pygame.font.SysFont(None, 15, bold=True)
                         bonus_pct = player.dame_buff_kills * 0.25 
@@ -1382,7 +1417,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     
                     buff_start_x += 42 
 
-        # --- UI CHỌN BUFF ---
         if game_state == "CHOOSING_BUFF":
             overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 180))
@@ -1411,7 +1445,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         player.kaboom_level = player_buffs['kaboom']
                     
                     max_shield = 50 * player_buffs['shield']
-                    shield_hp = min(max_shield, shield_hp + max_shield // 2)
+                    shield_hp = max_shield
                     
                     game_state = "WAVE_TRANSITION"
                     transition_timer = current_time

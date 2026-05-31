@@ -4,16 +4,12 @@ import os
 import math
 import random
 
-# Biến toàn cục lưu vũ khí đang được chọn (Mặc định là 'sword')
+# Biến toàn cục lưu vũ khí đang được chọn
 SELECTED_WEAPON = 'sword'
 
-# Biến toàn cục lưu cache các frame hoạt ảnh nổ của flower
+# Cache hoạt ảnh
 FLOWER_EXPLOSION_CACHE = []
-
-# Biến toàn cục lưu cache hình ảnh các vũ khí để thực thể tự động đồng bộ hình ảnh
 WEAPON_IMAGES_CACHE = {}
-
-# Biến toàn cục lưu thực thể người chơi để xử lý hồi máu và buff nâng cao
 CURRENT_PLAYER = None
 
 def get_flower_explosion_frames():
@@ -22,26 +18,19 @@ def get_flower_explosion_frames():
         try:
             sheet_path = os.path.join('weapon', 'flowerex.png')
             sheet = pygame.image.load(sheet_path).convert_alpha()
-            
             frame_w = sheet.get_width() // 4
             frame_h = sheet.get_height() // 4
-            
             count = 0
             for row in range(4):
                 for col in range(4):
-                    if count >= 15:
-                        break
+                    if count >= 15: break
                     frame = pygame.Surface((frame_w, frame_h), pygame.SRCALPHA)
                     frame.blit(sheet, (0, 0), (col * frame_w, row * frame_h, frame_w, frame_h))
-                    
                     frame = pygame.transform.scale(frame, (frame_w * 2, frame_h * 2))
                     
-                    if count == 8:
-                        frame.set_alpha(190)
-                    elif count == 9:
-                        frame.set_alpha(120)
-                    elif count >= 10:
-                        frame.set_alpha(50)
+                    if count == 8: frame.set_alpha(190)
+                    elif count == 9: frame.set_alpha(120)
+                    elif count >= 10: frame.set_alpha(50)
                         
                     FLOWER_EXPLOSION_CACHE.append(frame)
                     count += 1
@@ -50,7 +39,6 @@ def get_flower_explosion_frames():
             dummy = pygame.Surface((360, 360), pygame.SRCALPHA)
             pygame.draw.circle(dummy, (255, 105, 180), (180, 180), 100)
             FLOWER_EXPLOSION_CACHE = [dummy] * 15
-            
     return FLOWER_EXPLOSION_CACHE
 
 # ==========================================
@@ -68,8 +56,7 @@ class WeaponExplosion:
             self.lifetime = 18  
             colors = [(255, 255, 255), (220, 220, 225), (180, 180, 185), (130, 130, 140), (90, 90, 100)]
             self.slashes = []
-            num_slashes = random.randint(5, 8)
-            for _ in range(num_slashes):
+            for _ in range(random.randint(5, 8)):
                 self.slashes.append({
                     'offset_x': random.uniform(-20, 20),
                     'offset_y': random.uniform(-20, 20),
@@ -78,16 +65,13 @@ class WeaponExplosion:
                     'width': random.randint(3, 8),     
                     'color': random.choice(colors)
                 })
-                
             self.sparks = []
-            num_sparks = random.randint(10, 20)
-            for _ in range(num_sparks):
+            for _ in range(random.randint(10, 20)):
                 angle = random.uniform(0, 2 * math.pi)
                 speed = random.uniform(2.0, 7.0)
                 self.sparks.append({
                     'x': 0, 'y': 0,
-                    'vx': math.cos(angle) * speed,
-                    'vy': math.sin(angle) * speed,
+                    'vx': math.cos(angle) * speed, 'vy': math.sin(angle) * speed,
                     'size': random.uniform(3, 7), 
                     'color': random.choice(colors)
                 })
@@ -99,29 +83,24 @@ class WeaponExplosion:
                 {'radius': -15, 'max_radius': random.uniform(150, 200), 'speed': 7.5, 'width': 4, 'color': (255, 255, 255)} 
             ]
             self.smoke_particles = []
-            num_smoke = random.randint(20, 30)
-            for _ in range(num_smoke):
+            for _ in range(random.randint(20, 30)):
                 angle = random.uniform(0, 2 * math.pi)
                 speed = random.uniform(1.0, 4.5)
-                smoke_color = random.choice([(120, 120, 120), (170, 170, 170), (100, 150, 200)])
                 self.smoke_particles.append({
                     'x': 0, 'y': 0,
-                    'vx': math.cos(angle) * speed,
-                    'vy': math.sin(angle) * speed,
+                    'vx': math.cos(angle) * speed, 'vy': math.sin(angle) * speed,
                     'size': random.uniform(4, 10), 
-                    'color': smoke_color
+                    'color': random.choice([(120, 120, 120), (170, 170, 170), (100, 150, 200)])
                 })
             
         elif self.weapon_name == 'gun':
             self.lifetime = 15  
-            num_particles = random.randint(8, 12)
             gun_colors = [(255, 255, 100), (255, 215, 0), (200, 150, 100), (180, 130, 80)]
-            for _ in range(num_particles):
+            for _ in range(random.randint(8, 12)):
                 angle = random.uniform(0, 2 * math.pi)
                 dist = random.uniform(1, 6) 
                 self.particles.append({
-                    'dx': math.cos(angle) * dist,
-                    'dy': math.sin(angle) * dist,
+                    'dx': math.cos(angle) * dist, 'dy': math.sin(angle) * dist,
                     'color': random.choice(gun_colors),
                     'speed': random.uniform(1.0, 1.8), 
                     'current_radius': random.randint(5, 10) 
@@ -136,52 +115,41 @@ class WeaponExplosion:
         elif self.weapon_name == 'wrench':
             self.lifetime = 18
             wrench_colors = [(255, 255, 255), (210, 210, 210), (130, 130, 130), (70, 70, 70)]
-            num_squares = random.randint(30, 45) 
-            for _ in range(num_squares):
+            for _ in range(random.randint(30, 45)):
                 angle = random.uniform(0, 2 * math.pi)
                 speed = random.uniform(4.0, 9.0) 
                 self.particles.append({
                     'x': 0, 'y': 0,
-                    'vx': math.cos(angle) * speed,
-                    'vy': math.sin(angle) * speed,
+                    'vx': math.cos(angle) * speed, 'vy': math.sin(angle) * speed,
                     'size': random.choice([2, 3, 4]), 
                     'color': random.choice(wrench_colors)
                 })
                 
         else:
-            # Xử lý hiệu ứng nổ cho Bomb / Buff Kaboom nâng cấp
             cp = globals().get('CURRENT_PLAYER')
-            k_lvl = 0
-            if cp:
-                if hasattr(cp, 'kaboom_level'): k_lvl = cp.kaboom_level
-                elif hasattr(cp, 'kaboom'): k_lvl = cp.kaboom
-            
+            k_lvl = cp.kaboom_level if cp and hasattr(cp, 'kaboom_level') else 0
             if self.weapon_name in ['bomb', 'bomb1', 'bomb2'] and k_lvl == 0:
                 k_lvl = 1  
                 
             if k_lvl > 0:
                 self.lifetime = 25 + k_lvl * 5
-                num_particles = random.randint(25, 40) if k_lvl < 3 else random.randint(90, 130)
-                for _ in range(num_particles):
+                num_p = random.randint(25, 40) if k_lvl < 3 else random.randint(90, 130)
+                for _ in range(num_p):
                     angle = random.uniform(0, 2 * math.pi)
-                    max_dist = 25 * k_lvl if k_lvl < 3 else 700
-                    dist = random.uniform(2, max_dist)
+                    dist = random.uniform(2, 25 * k_lvl if k_lvl < 3 else 700)
                     self.particles.append({
-                        'dx': math.cos(angle) * dist,
-                        'dy': math.sin(angle) * dist,
+                        'dx': math.cos(angle) * dist, 'dy': math.sin(angle) * dist,
                         'color_phase': random.uniform(0, 0.7),
                         'speed': random.uniform(1.02, 1.06) if k_lvl < 3 else random.uniform(1.04, 1.14),
                         'current_radius': random.randint(12, 28) * (1 + k_lvl * 0.25)
                     })
             else:
                 self.lifetime = 20  
-                num_particles = random.randint(12, 18)
-                for _ in range(num_particles):
+                for _ in range(random.randint(12, 18)):
                     angle = random.uniform(0, 2 * math.pi)
                     dist = random.uniform(5, 25)
                     self.particles.append({
-                        'dx': math.cos(angle) * dist,
-                        'dy': math.sin(angle) * dist,
+                        'dx': math.cos(angle) * dist, 'dy': math.sin(angle) * dist,
                         'color_phase': random.uniform(0, 1),
                         'speed': random.uniform(1.0, 2.0),
                         'current_radius': random.randint(12, 25)
@@ -189,78 +157,49 @@ class WeaponExplosion:
 
     def update(self):
         self.timer += 1
-        
         if self.weapon_name == 'sword':
-            for s in self.slashes:
-                s['length'] *= 0.75  
+            for s in self.slashes: s['length'] *= 0.75  
             for sp in self.sparks:
-                sp['x'] += sp['vx']
-                sp['y'] += sp['vy']
-                sp['size'] -= 0.25   
-                
+                sp['x'] += sp['vx']; sp['y'] += sp['vy']; sp['size'] -= 0.25   
         elif self.weapon_name == 'axe':
-            for s in self.shockwaves:
-                s['radius'] += s['speed']
+            for s in self.shockwaves: s['radius'] += s['speed']
             for p in self.smoke_particles:
-                p['x'] += p['vx']
-                p['y'] += p['vy']
-                p['size'] -= 0.15 
-                
+                p['x'] += p['vx']; p['y'] += p['vy']; p['size'] -= 0.15 
         elif self.weapon_name == 'gun':
             for p in self.particles:
-                p['dx'] *= p['speed']
-                p['dy'] *= p['speed']
+                p['dx'] *= p['speed']; p['dy'] *= p['speed']
                 p['current_radius'] = max(0, p['current_radius'] - 1.0)
-                
         elif self.weapon_name == 'flower':
             self.current_frame += self.animation_speed
-            if int(self.current_frame) >= len(self.frames):
-                return False 
+            if int(self.current_frame) >= len(self.frames): return False 
             return True
-            
         elif self.weapon_name == 'wrench':
             for p in self.particles:
-                p['x'] += p['vx']
-                p['y'] += p['vy']
-                p['vx'] *= 0.91
-                p['vy'] *= 0.91
-                
+                p['x'] += p['vx']; p['y'] += p['vy']
+                p['vx'] *= 0.91; p['vy'] *= 0.91
         else:
             for p in self.particles:
-                p['dx'] *= p['speed']
-                p['dy'] *= p['speed']
+                p['dx'] *= p['speed']; p['dy'] *= p['speed']
                 p['current_radius'] = max(0, p['current_radius'] - 1.0)
-            
         return self.timer < self.lifetime
 
     def draw(self, surface, camera_x=0, camera_y=0):
         if self.weapon_name != 'flower':
-            alpha = int(255 * (1 - (self.timer / self.lifetime)))
-            if alpha < 0: alpha = 0
+            alpha = max(0, int(255 * (1 - (self.timer / self.lifetime))))
 
         if self.weapon_name == 'sword':
             surf_size = 160 
             slash_surf = pygame.Surface((surf_size, surf_size), pygame.SRCALPHA)
             center = surf_size // 2
-            
             for s in self.slashes:
                 if s['length'] < 2: continue
-                dx = math.cos(s['angle']) * (s['length'] / 2)
-                dy = math.sin(s['angle']) * (s['length'] / 2)
-                start_pos = (center + s['offset_x'] - dx, center + s['offset_y'] - dy)
-                end_pos = (center + s['offset_x'] + dx, center + s['offset_y'] + dy)
-                
+                dx, dy = math.cos(s['angle']) * (s['length'] / 2), math.sin(s['angle']) * (s['length'] / 2)
                 current_width = max(1, int(s['width'] * (1 - self.timer / self.lifetime)))
-                color_with_alpha = (*s['color'], alpha)
-                pygame.draw.line(slash_surf, color_with_alpha, start_pos, end_pos, current_width)
-                
+                pygame.draw.line(slash_surf, (*s['color'], alpha), (center + s['offset_x'] - dx, center + s['offset_y'] - dy), (center + s['offset_x'] + dx, center + s['offset_y'] + dy), current_width)
             for sp in self.sparks:
                 if sp['size'] < 1: continue
-                color_with_alpha = (*sp['color'], alpha)
                 rect_size = int(sp['size'])
-                spark_rect = pygame.Rect(center + sp['x'] - rect_size // 2, center + sp['y'] - rect_size // 2, rect_size, rect_size)
-                pygame.draw.rect(slash_surf, color_with_alpha, spark_rect)
-                
+                pygame.draw.rect(slash_surf, (*sp['color'], alpha), pygame.Rect(center + sp['x'] - rect_size // 2, center + sp['y'] - rect_size // 2, rect_size, rect_size))
             surface.blit(slash_surf, (self.x - center - camera_x, self.y - center - camera_y))
             
         elif self.weapon_name == 'axe':
@@ -269,57 +208,42 @@ class WeaponExplosion:
                     r = int(s['radius'])
                     wave_alpha = max(0, int(255 * (1 - (s['radius'] / s['max_radius']))))
                     final_alpha = int(wave_alpha * (alpha / 255))
-                    
                     if final_alpha > 0:
                         surf_size = int(s['max_radius'] * 2 + 50)
-                        center = surf_size // 2
                         circle_surf = pygame.Surface((surf_size, surf_size), pygame.SRCALPHA)
-                        
                         num_blocks = max(12, int((2 * math.pi * r) / 18))
                         block_size = int(s['width'] * 2)
-                        
                         for i in range(num_blocks):
                             angle = (2 * math.pi / num_blocks) * i
-                            px = center + math.cos(angle) * r
-                            py = center + math.sin(angle) * r
-                            pygame.draw.rect(circle_surf, (*s['color'], final_alpha), 
-                                             (px - block_size//2, py - block_size//2, block_size, block_size))
-                        
-                        surface.blit(circle_surf, (self.x - center - camera_x, self.y - center - camera_y))
-                        
+                            pygame.draw.rect(circle_surf, (*s['color'], final_alpha), (surf_size//2 + math.cos(angle) * r - block_size//2, surf_size//2 + math.sin(angle) * r - block_size//2, block_size, block_size))
+                        surface.blit(circle_surf, (self.x - surf_size//2 - camera_x, self.y - surf_size//2 - camera_y))
             for p in self.smoke_particles:
                 if p['size'] > 0:
                     size = int(p['size'])
-                    smoke_alpha = max(0, int(alpha * 0.8))
                     smoke_surf = pygame.Surface((size, size), pygame.SRCALPHA)
-                    pygame.draw.circle(smoke_surf, (*p['color'], smoke_alpha), (size//2, size//2), size//2)
+                    pygame.draw.circle(smoke_surf, (*p['color'], max(0, int(alpha * 0.8))), (size//2, size//2), size//2)
                     surface.blit(smoke_surf, (self.x + p['x'] - size//2 - camera_x, self.y + p['y'] - size//2 - camera_y))
                         
         elif self.weapon_name == 'gun':
             for p in self.particles:
                 if p['current_radius'] <= 0: continue
                 r = int(p['current_radius'])
-                color_with_alpha = (*p['color'], alpha)
-                
                 circle_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
-                pygame.draw.rect(circle_surf, color_with_alpha, (0, 0, r * 2, r * 2))
+                pygame.draw.rect(circle_surf, (*p['color'], alpha), (0, 0, r * 2, r * 2))
                 surface.blit(circle_surf, (self.x + p['dx'] - r - camera_x, self.y + p['dy'] - r - camera_y))
 
         elif self.weapon_name == 'flower':
             if self.frames:
                 frame_idx = min(int(self.current_frame), len(self.frames) - 1)
                 img = self.frames[frame_idx]
-                draw_x = self.x - img.get_width() // 2 - camera_x
-                draw_y = self.y - img.get_height() // 2 - camera_y
-                surface.blit(img, (draw_x, draw_y))
+                surface.blit(img, (self.x - img.get_width() // 2 - camera_x, self.y - img.get_height() // 2 - camera_y))
 
         elif self.weapon_name == 'wrench':
             for p in self.particles:
                 if alpha <= 0: continue
                 size = p['size']
                 wrench_surf = pygame.Surface((size, size), pygame.SRCALPHA)
-                color_with_alpha = (*p['color'], alpha)
-                pygame.draw.rect(wrench_surf, color_with_alpha, (0, 0, size, size))
+                pygame.draw.rect(wrench_surf, (*p['color'], alpha), (0, 0, size, size))
                 surface.blit(wrench_surf, (self.x + p['x'] - size//2 - camera_x, self.y + p['y'] - size//2 - camera_y))
 
         else:
@@ -329,16 +253,13 @@ class WeaponExplosion:
                 if total_phase < 0.3: color = (255, 255, 100, alpha)
                 elif total_phase < 0.6: color = (255, 160, 50, alpha)
                 elif total_phase < 0.9: color = (220, 50, 50, alpha)
-                else:
-                    darkness = int(50 * (1 - alpha/255))
-                    color = (darkness, darkness, darkness, alpha)
+                else: color = (int(50 * (1 - alpha/255)), int(50 * (1 - alpha/255)), int(50 * (1 - alpha/255)), alpha)
 
                 r = int(p['current_radius'])
                 if r > 0:
                     circle_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
                     pygame.draw.circle(circle_surf, color, (r, r), r)
                     surface.blit(circle_surf, (self.x + p['dx'] - r - camera_x, self.y + p['dy'] - r - camera_y))
-
 
 # ==========================================
 # CƠ CHẾ VŨ KHÍ (ORBIT, THROW & EXPLODE)
@@ -363,25 +284,25 @@ class WeaponEntity:
         self.action_time = 0     
         self.display_angle = 0   
         self.shoot_angle = 0     
+        self.recoil_timer = 0    # Hiệu ứng co giật súng
         
         self.trail = []          
         self.max_trail_len = 6   
         self.spin_speed = 22     
         
         self.explosion = None
-        self.active_bullet = None
-        
         self.last_orbit_hit_time = 0 
-        self.is_toxic = False  # Đánh dấu có phải bom độc hay không
+        self.is_toxic = False 
         
     def throw(self, target_x, target_y, start_x, start_y):
+        # NOTE: Súng (Gun) hiện tại điều khiển đạn độc lập bên gameplay.py
+        # Hàm throw này chỉ áp dụng cho các vũ khí cận chiến/ném khác
         if self.state == 'orbit':
             self.thrown_weapon_type = SELECTED_WEAPON
             self.x, self.y = start_x, start_y
             
-            # --- CƠ CHẾ BOMB ĐỘC MỚI ---
             if self.thrown_weapon_type in ['bomb', 'bomb1', 'bomb2']:
-                self.is_toxic = random.random() < 0.25 # 25% biến thành bom độc lúc ném
+                self.is_toxic = random.random() < 0.25 
                 if self.is_toxic and 'toxic_bomb' in WEAPON_IMAGES_CACHE:
                     self.original_image = WEAPON_IMAGES_CACHE['toxic_bomb']
             else:
@@ -392,56 +313,22 @@ class WeaponEntity:
             dist = math.hypot(dx, dy)
             
             if dist > 0:
-                if self.thrown_weapon_type == 'axe':
-                    self.state = 'thrown'
-                    speed = 18   
-                    self.friction = 0.92 
-                    self.spin_speed = 12
-                    self.vx = (dx / dist) * speed
-                    self.vy = (dy / dist) * speed
-                    
-                elif self.thrown_weapon_type == 'gun':
-                    self.state = 'shooting'
-                    self.action_time = pygame.time.get_ticks()
-                    self.shoot_angle = math.degrees(math.atan2(-dy, dx)) - 45
-                    
-                    bullet_speed = 30 
-                    self.active_bullet = {
-                        'x': start_x, 'y': start_y, 
-                        'vx': (dx / dist) * bullet_speed,
-                        'vy': (dy / dist) * bullet_speed,
-                        'life': 30,
-                        'just_shot': True 
-                    }
-                    
-                else: 
-                    self.state = 'thrown'
-                    speed = 12 if self.thrown_weapon_type in ['bomb', 'bomb1', 'bomb2'] else 22  
-                    self.friction = 0.94
-                    self.vx = (dx / dist) * speed
-                    self.vy = (dy / dist) * speed
-                    
-                    if self.thrown_weapon_type == 'sword':
-                        self.spin_speed = 0 
-                        self.display_angle = math.degrees(math.atan2(-dy, dx)) - 45 
-                    else:
-                        self.spin_speed = 22
+                self.state = 'thrown'
+                speed = 18 if self.thrown_weapon_type == 'axe' else (12 if self.thrown_weapon_type in ['bomb', 'bomb1', 'bomb2'] else 22)
+                self.friction = 0.92 if self.thrown_weapon_type == 'axe' else 0.94
+                self.vx = (dx / dist) * speed
+                self.vy = (dy / dist) * speed
+                
+                if self.thrown_weapon_type == 'sword':
+                    self.spin_speed = 0 
+                    self.display_angle = math.degrees(math.atan2(-dy, dx)) - 45 
+                else:
+                    self.spin_speed = 12 if self.thrown_weapon_type == 'axe' else 22
             
             self.trail.clear()
             self.explosion = None
 
-    def _deal_damage_to_entity(self, entity, amount):
-        try:
-            if hasattr(entity, 'take_damage'):
-                entity.take_damage(amount)
-            elif hasattr(entity, 'hp'):
-                entity.hp -= amount
-            elif hasattr(entity, 'health'):
-                entity.health -= amount
-        except Exception:
-            pass 
-
-    def update(self, player_x, player_y, entities):
+    def update(self, player_x, player_y, colliders):
         global WEAPON_IMAGES_CACHE
         current_time = pygame.time.get_ticks()
         
@@ -450,7 +337,6 @@ class WeaponEntity:
                 self.explosion = None
         
         if self.state == 'orbit':
-            # Reset cờ toxic và lấy lại hình ảnh ban đầu nếu đang ở quỹ đạo
             self.is_toxic = False 
             if WEAPON_IMAGES_CACHE and SELECTED_WEAPON in WEAPON_IMAGES_CACHE:
                 if self.original_image != WEAPON_IMAGES_CACHE[SELECTED_WEAPON]:
@@ -461,25 +347,24 @@ class WeaponEntity:
 
             self.angle = (self.angle + self.orbit_speed) % 360
             rad = math.radians(self.angle)
-            self.x = player_x + math.cos(rad) * self.orbit_radius
-            self.y = player_y + math.sin(rad) * self.orbit_radius
-            self.display_angle = -self.angle - 45
+            
+            # --- HIỆU ỨNG CO GIẬT SÚNG ---
+            if hasattr(self, 'recoil_timer') and self.recoil_timer > 0:
+                self.recoil_timer -= 1
+                recoil_dist = self.orbit_radius * 0.4
+                self.x = player_x + math.cos(self.shoot_angle) * recoil_dist + random.uniform(-4, 4)
+                self.y = player_y + math.sin(self.shoot_angle) * recoil_dist + random.uniform(-4, 4)
+                self.display_angle = -math.degrees(self.shoot_angle)
+            else:
+                self.x = player_x + math.cos(rad) * self.orbit_radius
+                self.y = player_y + math.sin(rad) * self.orbit_radius
+                if SELECTED_WEAPON == 'gun':
+                    self.display_angle = -self.angle
+                else:
+                    self.display_angle = -self.angle - 45
+                
             self.rect.center = (int(self.x), int(self.y))
             self.trail.clear()
-
-            if current_time - self.last_orbit_hit_time > 400: 
-                hit_anything = False
-                # SỬA ĐỔI CHÍNH: Thu nhỏ hitbox vũ khí khi bay vòng quanh người đi 26 pixel mỗi cạnh
-                weapon_hitbox = self.rect.inflate(-26, -26)
-                
-                for entity in entities:
-                    entity_rect = entity.rect if hasattr(entity, 'rect') else entity
-                    if isinstance(entity_rect, pygame.Rect) and weapon_hitbox.colliderect(entity_rect):
-                        self._deal_damage_to_entity(entity, 10)
-                        hit_anything = True
-                
-                if hit_anything:
-                    self.last_orbit_hit_time = current_time
             
         elif self.state == 'thrown':
             self.x += self.vx
@@ -496,112 +381,22 @@ class WeaponEntity:
             if len(self.trail) > self.max_trail_len:
                 self.trail.pop(0)
             
-            hit_entity = False
-            # SỬA ĐỔI CHÍNH: Bóp nhỏ hitbox khi vũ khí bị ném đi, giúp vũ khí bay mượt qua các chướng ngại vật sát viền
-            weapon_hitbox = self.rect.inflate(-26, -26)
-            
-            for entity in entities:
-                entity_rect = entity.rect if hasattr(entity, 'rect') else entity
-                if isinstance(entity_rect, pygame.Rect) and weapon_hitbox.colliderect(entity_rect):
-                    self._deal_damage_to_entity(entity, 25)
-                    hit_entity = True
-                    
+            hit_obstacle = False
+            for obs in colliders:
+                obs_rect = obs.rect if hasattr(obs, 'rect') else obs
+                if isinstance(obs_rect, pygame.Rect) and self.rect.colliderect(obs_rect):
+                    hit_obstacle = True
                     if self.thrown_weapon_type == 'flower':
                         cp = globals().get('CURRENT_PLAYER')
-                        if cp:
-                            try:
-                                if hasattr(cp, 'heal'):
-                                    cp.heal(1)
-                                elif hasattr(cp, 'health'):
-                                    cp.health += 1
-                                    if hasattr(cp, 'max_health'):
-                                        cp.health = min(cp.health, cp.max_health)
-                                elif hasattr(cp, 'hp'):
-                                    cp.hp += 1
-                                    if hasattr(cp, 'max_hp'):
-                                        cp.hp = min(cp.hp, cp.max_hp)
-                            except Exception:
-                                pass
+                        if cp and hasattr(cp, 'health'):
+                            cp.health = min(cp.health + 1, cp.max_health)
                     break 
                     
-            if hit_entity or math.hypot(self.vx, self.vy) < 0.5:
+            if hit_obstacle or math.hypot(self.vx, self.vy) < 0.5:
                 self.state = 'disappeared'
                 self.action_time = current_time 
                 self.rect.center = (-9999, -9999) 
                 self.explosion = WeaponExplosion(self.x, self.y, self.thrown_weapon_type)
-                
-                if self.thrown_weapon_type in ['bomb', 'bomb1', 'bomb2'] or self.thrown_weapon_type == 'kaboom':
-                    cp = globals().get('CURRENT_PLAYER')
-                    k_lvl = 1  
-                    if cp:
-                        if hasattr(cp, 'kaboom_level'): k_lvl = cp.kaboom_level
-                        elif hasattr(cp, 'kaboom'): k_lvl = cp.kaboom
-                    
-                    if k_lvl == 1:
-                        explosion_damage = 75
-                        explosion_radius = 160
-                    elif k_lvl == 2:
-                        explosion_damage = 150
-                        explosion_radius = 300
-                    else:  
-                        explosion_damage = 450
-                        explosion_radius = 999999  
-                        
-                    for entity in entities:
-                        if explosion_radius >= 999999:
-                            self._deal_damage_to_entity(entity, explosion_damage)
-                        else:
-                            ex = getattr(entity, 'x', None)
-                            ey = getattr(entity, 'y', None)
-                            if ex is None or ey is None:
-                                if hasattr(entity, 'rect') and isinstance(entity.rect, pygame.Rect):
-                                    ex, ey = entity.rect.centerx, entity.rect.centery
-                            if ex is not None and ey is not None:
-                                if math.hypot(ex - self.x, ey - self.y) <= explosion_radius:
-                                    self._deal_damage_to_entity(entity, explosion_damage)
-                
-        elif self.state == 'shooting':
-            closer_radius = self.orbit_radius * 0.4
-            rad = math.radians(self.angle)
-            base_x = player_x + math.cos(rad) * closer_radius
-            base_y = player_y + math.sin(rad) * closer_radius
-            
-            if current_time - self.action_time < 150:
-                self.x = base_x + random.uniform(-3, 3)
-                self.y = base_y + random.uniform(-3, 3)
-            else:
-                self.x = base_x
-                self.y = base_y
-                
-            self.display_angle = self.shoot_angle 
-            self.rect.center = (int(self.x), int(self.y))
-            self.trail.clear()
-            
-            if self.active_bullet:
-                if self.active_bullet.get('just_shot'):
-                    self.active_bullet['x'] = self.x
-                    self.active_bullet['y'] = self.y
-                    self.active_bullet['just_shot'] = False
-                
-                self.active_bullet['x'] += self.active_bullet['vx']
-                self.active_bullet['y'] += self.active_bullet['vy']
-                self.active_bullet['life'] -= 1
-                
-                bullet_rect = pygame.Rect(0, 0, 10, 10)
-                bullet_rect.center = (int(self.active_bullet['x']), int(self.active_bullet['y']))
-                
-                hit_entity = False
-                for entity in entities:
-                    entity_rect = entity.rect if hasattr(entity, 'rect') else entity
-                    if isinstance(entity_rect, pygame.Rect) and bullet_rect.colliderect(entity_rect):
-                        self._deal_damage_to_entity(entity, 21)
-                        hit_entity = True
-                        break
-                        
-                if hit_entity or self.active_bullet['life'] <= 0:
-                    self.explosion = WeaponExplosion(self.active_bullet['x'], self.active_bullet['y'], 'gun')
-                    self.active_bullet = None
-                    self.state = 'orbit' 
                 
         elif self.state == 'disappeared':
             respawn_cooldown = 1800 if self.thrown_weapon_type in ['bomb', 'bomb1', 'bomb2'] else 500
@@ -612,8 +407,7 @@ class WeaponEntity:
         if self.explosion:
             self.explosion.draw(surface, camera_x, camera_y)
             
-        if self.state == 'disappeared':
-            return
+        if self.state == 'disappeared': return
             
         if self.state == 'thrown':
             for i, (tx, ty, tangle) in enumerate(self.trail):
@@ -621,23 +415,10 @@ class WeaponEntity:
                 trail_rotated = pygame.transform.rotate(self.original_image, tangle)
                 trail_surf = trail_rotated.copy()
                 trail_surf.set_alpha(alpha)
-                trail_rect = trail_surf.get_rect(center=(int(tx - camera_x), int(ty - camera_y)))
-                surface.blit(trail_surf, trail_rect)
+                surface.blit(trail_surf, trail_surf.get_rect(center=(int(tx - camera_x), int(ty - camera_y))))
 
         rotated_image = pygame.transform.rotate(self.original_image, self.display_angle)
-        draw_rect = rotated_image.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y)))
-        surface.blit(rotated_image, draw_rect)
-        
-        if self.state == 'shooting' and self.active_bullet:
-            bx = self.active_bullet['x'] - camera_x
-            by = self.active_bullet['y'] - camera_y
-            
-            tracer_end_x = bx - self.active_bullet['vx'] * 0.5
-            tracer_end_y = by - self.active_bullet['vy'] * 0.5
-            pygame.draw.line(surface, (255, 200, 50), (tracer_end_x, tracer_end_y), (bx, by), 4)
-            
-            pygame.draw.rect(surface, (255, 215, 0), (bx - 4, by - 4, 8, 8)) 
-            pygame.draw.rect(surface, (255, 255, 255), (bx - 2, by - 2, 4, 4)) 
+        surface.blit(rotated_image, rotated_image.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y))))
 
 # ==========================================
 # LOAD ẢNH VÀ HIỂN THỊ MENU CHỌN VŨ KHÍ
@@ -646,41 +427,30 @@ def load_weapon_images():
     global WEAPON_IMAGES_CACHE
     weapons = {}
     folder = 'weapon'
-    if not os.path.exists(folder):
-        os.makedirs(folder)
+    if not os.path.exists(folder): os.makedirs(folder)
         
     ignore_files = ['flower2', 'bomb1', 'flowerex'] 
-    
-    rename_rules = {
-        'flower1': 'flower',  
-        'bomb2': 'bomb'       
-    }
+    rename_rules = {'flower1': 'flower', 'bomb2': 'bomb'}
 
     if os.path.exists(folder):
         for file_name in os.listdir(folder):
-            if file_name.lower().endswith('.png') or file_name.lower().endswith('.jpg'):
+            if file_name.lower().endswith(('.png', '.jpg')):
                 base_name = file_name.rsplit('.', 1)[0]
-                if base_name in ignore_files:
-                    continue
-                
+                if base_name in ignore_files: continue
                 weapon_name = rename_rules.get(base_name, base_name)
                 try:
                     img = pygame.image.load(os.path.join(folder, file_name)).convert_alpha()
                     if weapon_name in ['gun', 'bomb', 'flower']:
-                        new_size = int(70 / 1.2)
-                        weapons[weapon_name] = pygame.transform.scale(img, (new_size, new_size))
+                        weapons[weapon_name] = pygame.transform.scale(img, (int(70 / 1.2), int(70 / 1.2)))
                     else:
                         weapons[weapon_name] = pygame.transform.scale(img, (70, 70))
-                        
                 except Exception as e:
                     print(f"Không thể tải ảnh {file_name}: {e}")
                     
-    # Tải ảnh bom độc
     try:
         tb_img = pygame.image.load(os.path.join('specialskill', 'bomb2.png')).convert_alpha()
         weapons['toxic_bomb'] = pygame.transform.scale(tb_img, (int(70 / 1.2), int(70 / 1.2)))
-    except Exception as e:
-        print(f"Lỗi tải bom độc (specialskill/bomb2.png): {e}")
+    except:
         dummy_tb = pygame.Surface((58, 58), pygame.SRCALPHA)
         pygame.draw.circle(dummy_tb, (150, 30, 200), (29, 29), 20)
         weapons['toxic_bomb'] = dummy_tb
@@ -721,43 +491,27 @@ def weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_
     if SELECTED_WEAPON not in weapon_names and weapon_names:
         SELECTED_WEAPON = weapon_names[0]
         
-    # --- LOAD ẢNH BACKGROUND CUỘN ---
     bg_image = None
     for ext in ['.png', '.jpg', '.jpeg', '.PNG', '.JPG']:
         if os.path.exists('background5' + ext):
-            bg_image = pygame.image.load('background5' + ext).convert()
-            bg_image = pygame.transform.scale(bg_image, (WIDTH, HEIGHT))
+            bg_image = pygame.transform.scale(pygame.image.load('background5' + ext).convert(), (WIDTH, HEIGHT))
             break
             
     bg_x = 0
-    
-    # --- CHIA LƯỚI GRID ĐỂ KHÔNG BỊ TRÀN ---
     BOX_SIZE, GAP = 120, 30
-    cols = 4 if len(weapon_names) >= 4 else len(weapon_names) # Tối đa 4 ô 1 hàng
-    if cols == 0: cols = 1
+    cols = max(1, 4 if len(weapon_names) >= 4 else len(weapon_names))
     rows = math.ceil(len(weapon_names) / cols)
     
-    total_w = cols * BOX_SIZE + (cols - 1) * GAP
-    total_h = rows * BOX_SIZE + (rows - 1) * GAP
+    start_x = (WIDTH - (cols * BOX_SIZE + (cols - 1) * GAP)) // 2
+    start_y = (HEIGHT - (rows * BOX_SIZE + (rows - 1) * GAP)) // 2 + 20 
     
-    start_x = (WIDTH - total_w) // 2
-    start_y = (HEIGHT - total_h) // 2 + 20 
-    
-    boxes = []
-    for i, name in enumerate(weapon_names):
-        col = i % cols
-        row = i // cols
-        rect = pygame.Rect(start_x + col * (BOX_SIZE + GAP), start_y + row * (BOX_SIZE + GAP), BOX_SIZE, BOX_SIZE)
-        boxes.append((rect, name))
-
+    boxes = [(pygame.Rect(start_x + (i % cols) * (BOX_SIZE + GAP), start_y + (i // cols) * (BOX_SIZE + GAP), BOX_SIZE, BOX_SIZE), name) for i, name in enumerate(weapon_names)]
     btn_back = pygame.Rect(20, 20, 70, 45)
 
     def draw_screen(mx, my, current_bg_x):
-        # Nền cuộn mượt mà
         if bg_image:
             screen.blit(bg_image, (int(current_bg_x), 0))
             screen.blit(bg_image, (int(current_bg_x) - WIDTH, 0))
-            # Lớp phủ làm tối màn hình một chút để nổi bật giao diện
             overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 100))
             screen.blit(overlay, (0, 0))
@@ -766,22 +520,16 @@ def weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_
             
         draw_text_with_shadow("CHOOSE YOUR WEAPON", game_assets['font_level_title'], (255, 215, 0), screen, WIDTH//2, 80)
         
-        # Nút Back
         pygame.draw.rect(screen, (100, 100, 100) if btn_back.collidepoint((mx, my)) else (50, 50, 50), btn_back, border_radius=10)
         draw_text_with_shadow("<<", game_assets['font_btn'], (255, 255, 255), screen, btn_back.centerx, btn_back.centery)
         
-        # Hiển thị các hộp vũ khí
         for rect, name in boxes:
             is_hover = rect.collidepoint((mx, my))
             is_selected = (name == SELECTED_WEAPON)
             
-            # Khung viền mờ trong suốt (Alpha = 200)
-            bg_color = (80, 80, 90, 200) if is_hover else (50, 50, 60, 200)
-            border_color = (100, 255, 100) if is_selected else (30, 30, 30)
-            
             box_surf = pygame.Surface(rect.size, pygame.SRCALPHA)
-            pygame.draw.rect(box_surf, bg_color, box_surf.get_rect(), border_radius=15)
-            pygame.draw.rect(box_surf, border_color, box_surf.get_rect(), width=4 if is_selected else 2, border_radius=15)
+            pygame.draw.rect(box_surf, (80, 80, 90, 200) if is_hover else (50, 50, 60, 200), box_surf.get_rect(), border_radius=15)
+            pygame.draw.rect(box_surf, (100, 255, 100) if is_selected else (30, 30, 30), box_surf.get_rect(), width=4 if is_selected else 2, border_radius=15)
             screen.blit(box_surf, rect.topleft)
             
             img = weapons_data[name]
@@ -793,12 +541,7 @@ def weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_
     running = True
     while running:
         mx, my = pygame.mouse.get_pos()
-        
-        # Cập nhật tọa độ để cuộn màn hình
-        bg_x += 1 
-        if bg_x >= WIDTH:
-            bg_x = 0
-            
+        bg_x = (bg_x + 1) % WIDTH 
         draw_screen(mx, my, bg_x)
         
         for event in pygame.event.get():
@@ -806,14 +549,11 @@ def weapon_selection_menu(screen, clock, WIDTH, HEIGHT, game_assets, transition_
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                # XỬ LÝ ÂM THANH CLICK VÀ THOÁT MENU
                 if btn_back.collidepoint((mx, my)):
-                    if game_assets.get('sound_button'):
-                        game_assets['sound_button'].play()
+                    if game_assets.get('sound_button'): game_assets['sound_button'].play()
                     transition_out(clock)
                     running = False
                 
-                # XỬ LÝ ÂM THANH KHI CHỌN VŨ KHÍ MỚI
                 for rect, name in boxes:
                     if rect.collidepoint((mx, my)):
                         if SELECTED_WEAPON != name and game_assets.get('sound_button'):
