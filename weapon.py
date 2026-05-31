@@ -469,9 +469,12 @@ class WeaponEntity:
 
             if current_time - self.last_orbit_hit_time > 400: 
                 hit_anything = False
+                # SỬA ĐỔI CHÍNH: Thu nhỏ hitbox vũ khí khi bay vòng quanh người đi 26 pixel mỗi cạnh
+                weapon_hitbox = self.rect.inflate(-26, -26)
+                
                 for entity in entities:
                     entity_rect = entity.rect if hasattr(entity, 'rect') else entity
-                    if isinstance(entity_rect, pygame.Rect) and self.rect.colliderect(entity_rect):
+                    if isinstance(entity_rect, pygame.Rect) and weapon_hitbox.colliderect(entity_rect):
                         self._deal_damage_to_entity(entity, 10)
                         hit_anything = True
                 
@@ -494,9 +497,12 @@ class WeaponEntity:
                 self.trail.pop(0)
             
             hit_entity = False
+            # SỬA ĐỔI CHÍNH: Bóp nhỏ hitbox khi vũ khí bị ném đi, giúp vũ khí bay mượt qua các chướng ngại vật sát viền
+            weapon_hitbox = self.rect.inflate(-26, -26)
+            
             for entity in entities:
                 entity_rect = entity.rect if hasattr(entity, 'rect') else entity
-                if isinstance(entity_rect, pygame.Rect) and self.rect.colliderect(entity_rect):
+                if isinstance(entity_rect, pygame.Rect) and weapon_hitbox.colliderect(entity_rect):
                     self._deal_damage_to_entity(entity, 25)
                     hit_entity = True
                     

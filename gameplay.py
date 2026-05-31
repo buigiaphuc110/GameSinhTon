@@ -64,7 +64,7 @@ class DangerExplosion:
         self.x, self.y, self.alarm_img, self.frames = x, y, alarm_img, explosion_frames
         self.state, self.start_timer, self.warning_duration = "WARNING", pygame.time.get_ticks(), 1500
         self.frame_index, self.frame_rate, self.last_frame_time = 0, 50, pygame.time.get_ticks()
-        self.has_dealt_damage, self.hitbox_radius = False, 130 
+        self.has_dealt_damage, self.hitbox_radius = False, 110 # GIẢM từ 130 xuống 110 để AoE vụ nổ sát rìa không bị dính oan
 
     def update(self, player, width, height, mode_name, player_shield=0):
         current_time = pygame.time.get_ticks()
@@ -97,7 +97,7 @@ class DangerExplosion:
 class LavaPool:
     def __init__(self, x, y, lava_img, shadow_image=None):
         self.x, self.y, self.image, self.shadow_image = x, y, lava_img, shadow_image
-        self.state, self.radius = "ACTIVE", int(110 / 2.25) 
+        self.state, self.radius = "ACTIVE", int(110 / 2.6) # SỬA ĐỔI: Bóp nhỏ bán kính vùng nham thạch để tránh dẫm rìa ngoài suốt
 
     def update(self, camera_x, camera_y, width, height):
         if not is_on_screen(self.x, self.y, camera_x, camera_y, width, height, buffer=200): self.state = "DONE"
@@ -111,8 +111,13 @@ class LavaPool:
 class EndlessEntity:
     def __init__(self, x, y, image, type_name, shadow_image=None):
         self.x, self.y, self.type_name, self.image, self.shadow_image = x, y, type_name, image, shadow_image
-        self.rect = self.image.get_rect(center=(x, y))
-        self.radius = max(self.rect.width, self.rect.height) // 2
+        
+        # SỬA ĐỔI CHÍNH: Thu nhỏ rect va chạm (Chướng ngại vật/Cây cối) vào trong 35% để loại bỏ phần ảnh trong suốt xung quanh
+        original_rect = self.image.get_rect(center=(x, y))
+        self.rect = original_rect.inflate(-original_rect.width * 0.35, -original_rect.height * 0.35)
+        
+        # Đồng thời thu nhỏ bán kính vòng tròn va chạm xuống còn 65% kích thước thật của ảnh
+        self.radius = int((max(original_rect.width, original_rect.height) // 2) * 0.65)
         self.state = "ACTIVE"
 
     def update(self, camera_x, camera_y, width, height):
@@ -125,9 +130,12 @@ class EndlessEntity:
                 alpha_val = max(0, min(255, int(20 + 2 * math.sin(pygame.time.get_ticks() / 200.0))))
                 draw_img = self.shadow_image.copy()
                 draw_img.fill((255, 255, 255, alpha_val), special_flags=pygame.BLEND_RGBA_MULT)
-            screen.blit(draw_img, draw_img.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y + self.rect.height//3))))
+            # Tính toán vị trí dựa theo chiều cao gốc của ảnh
+            orig_h = self.image.get_height()
+            screen.blit(draw_img, draw_img.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y + orig_h//3))))
 
     def draw(self, screen, camera_x, camera_y):
+        # Hàm vẽ vẫn lấy ảnh gốc vẽ đúng tâm để hiển thị đẹp mắt, nhưng khi kiểm tra va chạm bằng self.rect nó sẽ nhỏ gọn hơn hẳn
         screen.blit(self.image, self.image.get_rect(center=(int(self.x - camera_x), int(self.y - camera_y))))
 
 
@@ -142,7 +150,7 @@ class PoisonBullet:
         speed = 8.0
         self.vx = (dx / dist) * speed if dist > 0 else speed
         self.vy = (dy / dist) * speed if dist > 0 else 0
-        self.radius, self.life = 8, 100
+        self.radius, self.life = 6, 100 # GIẢM bán kính va chạm đạn độc từ 8 xuống 6 để né mượt hơn
 
     def update(self):
         self.x += self.vx
@@ -163,7 +171,7 @@ class ChainProjectile:
         dist = math.hypot(dx, dy)
         self.vx = (dx / dist) * 15 if dist > 0 else 0
         self.vy = (dy / dist) * 15 if dist > 0 else 0
-        self.radius, self.life = 8, 45
+        self.radius, self.life = 6, 45 # GIẢM từ 8 xuống 6
 
     def update(self):
         self.x += self.vx
@@ -183,7 +191,7 @@ class CannonballProjectile:
         dist = math.hypot(dx, dy)
         self.vx = (dx / dist) * 4.5 if dist > 0 else 0
         self.vy = (dy / dist) * 4.5 if dist > 0 else 0
-        self.radius, self.life = 14, 120
+        self.radius, self.life = 11, 120 # GIẢM bán kính đạn đại bác từ 14 xuống 11
 
     def update(self):
         self.x += self.vx
@@ -207,13 +215,20 @@ class EnemyNor:
         self.frame_index, self.frame_rate, self.last_frame_time = 0, 100, pygame.time.get_ticks()
         
         stat_mult = 1.0 + max(0, (wave - 3) // 2) * 0.20 if wave >= 5 else 1.0
-        
-        self.speed, self.radius = 35 * stat_mult, 20 
+        self.speed = 35 * stat_mult
         self.damage_cooldown, self.last_damage_time = 1000, 0
         self.angle, self.max_health = 0, int(100 * stat_mult)
         self.health, self.base_damage = self.max_health, int(5 * stat_mult)
         self.score_value = 10
-        self.rect = pygame.Rect(0, 0, self.frames[0].get_width(), self.frames[0].get_height()) if self.frames else pygame.Rect(0, 0, 32, 32)
+        
+        # SỬA ĐỔI CHÍNH: Co hẹp hitbox chữ nhật và hitbox tròn của quái thường đi 30% để vũ khí ném xuyên rìa không bị tính chạm hụt
+        if self.frames:
+            w, h = self.frames[0].get_width(), self.frames[0].get_height()
+            self.rect = pygame.Rect(0, 0, w, h).inflate(-w * 0.3, -h * 0.3)
+            self.radius = int(min(self.rect.width, self.rect.height) // 2 * 0.9)
+        else:
+            self.rect = pygame.Rect(0, 0, 32, 32)
+            self.radius = 14
 
     def take_damage(self, amount):
         self.health = max(0, self.health - amount)
@@ -258,11 +273,19 @@ class EnemyNorBig(EnemyNor):
         self.frames = [pygame.transform.scale(f, (f.get_width() * 2, f.get_height() * 2)) for f in self.frames]
         
         stat_mult = 1.0 + max(0, (wave - 3) // 2) * 0.20 if wave >= 5 else 1.0
-        self.speed, self.radius = 45 * stat_mult, 60 / 1.4 
+        self.speed = 45 * stat_mult
         self.max_health = int(300 * stat_mult)
         self.health, self.base_damage = self.max_health, int(15 * stat_mult)
         self.score_value = 30
-        self.rect = pygame.Rect(0, 0, self.frames[0].get_size()[0], self.frames[0].get_size()[1]) if self.frames else pygame.Rect(0, 0, 64, 64)
+        
+        # SỬA ĐỔI CHÍNH: Co hẹp hitbox chữ nhật và tròn của Quái To bớt 35%
+        if self.frames:
+            w, h = self.frames[0].get_width(), self.frames[0].get_height()
+            self.rect = pygame.Rect(0, 0, w, h).inflate(-w * 0.35, -h * 0.35)
+            self.radius = int(min(self.rect.width, self.rect.height) // 2 * 0.9)
+        else:
+            self.rect = pygame.Rect(0, 0, 64, 64)
+            self.radius = 28
 
     def draw(self, screen, camera_x, camera_y):
         super().draw(screen, camera_x, camera_y)
@@ -396,9 +419,11 @@ class EnemyShip:
         self.fire_rate = 3500
         self.last_shot_time = pygame.time.get_ticks()
         
-        self.radius = 30
+        # SỬA ĐỔI CHÍNH: Thu nhỏ rect va chạm của Tàu quái để không bị kẹt hay chạm ảo từ xa
+        self.rect = pygame.Rect(0, 0, 80, 80).inflate(-26, -26)
+        self.radius = 22 # GIẢM từ 30 xuống 22
+        
         self.angle = 0
-        self.rect = pygame.Rect(0, 0, 80, 80)
         self.damage_cooldown = 1000
         self.last_damage_time = 0
         self.base_damage = int(15 * stat_mult)
@@ -415,11 +440,13 @@ class EnemyShip:
             nx = self.x + (dx / dist) * self.speed * dt
             ny = self.y + (dy / dist) * self.speed * dt
             
+            # Khởi tạo một dummy_rect nhỏ gọn theo rect đã inflate để dò đường đi tránh vật thể mượt hơn
             dummy_rect = self.rect.copy()
             dummy_rect.center = (int(nx), int(ny))
             hit_obstacle = False
             if all_obstacles:
-                hit_obstacle = any(dummy_rect.colliderect(obs) for obs in all_obstacles)
+                # Kiểm tra va chạm với các rect chướng ngại vật đã được thu nhỏ ở EndlessEntity
+                hit_obstacle = any(dummy_rect.colliderect(obs.rect) if hasattr(obs, 'rect') else dummy_rect.colliderect(obs) for obs in all_obstacles)
                 
             if not hit_obstacle and dist > 150:
                 if 40 < nx < width - 40 and 40 < ny < height - 40:
@@ -429,7 +456,6 @@ class EnemyShip:
             self.angle = math.degrees(math.atan2(-dy, dx))
             
         self.rect.center = (int(self.x), int(self.y))
-        
         current_time = pygame.time.get_ticks()
 
         # Pháo nổ AoE
@@ -468,7 +494,7 @@ class OrangeExplosion:
         self.radius += (self.max_radius - self.radius) * 0.15 + 2
         self.life -= 12
         if self.radius >= self.max_radius * 0.75 and self.life > 0 and not self.has_dealt_damage:
-            if math.hypot(player.x - self.x, player.y - self.y) < self.max_radius:
+            if math.hypot(player.x - self.x, player.y - self.y) < self.max_radius * 0.85: # SỬA ĐỔI: Thu nhỏ bán kính nổ
                 self.has_dealt_damage = True
                 return True 
         return False
@@ -491,11 +517,8 @@ class KaboomExplosion:
             
         self.life = 255
         self.level = level
-        
-        # --- CẬP NHẬT LẠI: Sát thương cơ bản mới: 75 + (cấp * 12) ---
         base_damage = 75 + (level * 12)
         self.damage = base_damage * multiplier
-        
         self.has_dealt_damage = False
 
     def update(self, enemies):
@@ -505,7 +528,7 @@ class KaboomExplosion:
             self.has_dealt_damage = True
             for e in enemies:
                 dist = math.hypot(e.x - self.x, e.y - self.y)
-                if self.max_radius >= 999999 or dist < self.max_radius:
+                if self.max_radius >= 999999 or dist < self.max_radius * 0.9: # SỬA ĐỔI: Sát thương nổ bám sát hiệu ứng mắt nhìn hơn
                     e.take_damage(self.damage)
                     if dist > 0 and self.max_radius < 999999:
                         e.x += ((e.x - self.x) / dist) * 40
@@ -524,17 +547,17 @@ class KaboomExplosion:
                 pygame.draw.circle(surf, (255, 255, 200, max(0, self.life)), (self.max_radius, self.max_radius), int(self.radius), 3)
                 screen.blit(surf, (int(self.x - camera_x - self.max_radius), int(self.y - camera_y - self.max_radius)))
 
+
 # ==========================================
 # CÁC KỸ NĂNG TỪ BUFF
 # ==========================================
 class MagicOrb:
     def __init__(self):
-        self.angle, self.radius, self.base_damage = 0, 120, 10
+        self.angle, self.radius, self.base_damage = 0, 120, 10 
 
     def update_and_draw(self, player, enemies, screen, cx, cy, level, dmg_multiplier):
         if level <= 0: return
         self.angle = (self.angle + 4 + level*2) % 360
-        
         final_damage = (self.base_damage * level) * dmg_multiplier
         
         for i in range(level):
@@ -542,11 +565,13 @@ class MagicOrb:
             ox = player.x + math.cos(math.radians(offset_angle)) * self.radius
             oy = player.y + math.sin(math.radians(offset_angle)) * self.radius
             
-            pygame.draw.circle(screen, (150, 50, 255), (int(ox - cx), int(oy - cy)), 12 + level*2)
+            orb_radius = 12 + level * 2
+            pygame.draw.circle(screen, (150, 50, 255), (int(ox - cx), int(oy - cy)), orb_radius)
             pygame.draw.circle(screen, (200, 150, 255), (int(ox - cx), int(oy - cy)), 6 + level)
-
+            
             for e in enemies:
-                if math.hypot(e.x - ox, e.y - oy) < 30:
+                # SỬA ĐỔI: Tính va chạm linh hoạt dựa trên kích thước thực của từng loại quái e.radius thay vì gán cứng < 30
+                if math.hypot(e.x - ox, e.y - oy) < (orb_radius + e.radius):
                     e.take_damage(final_damage)
                     e.speed = max(10, e.speed - 15)
 
