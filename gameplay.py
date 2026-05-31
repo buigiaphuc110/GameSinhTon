@@ -1254,7 +1254,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 elif pw.state == 'orbit' and dist_to_enemy < (enemy.radius + weapon_hit_radius):
                     if not hasattr(pw, 'last_orbit_hit_time'): pw.last_orbit_hit_time = 0
                     if current_time - pw.last_orbit_hit_time > 400:
-                        is_dead = enemy.take_damage(11 * damage_multiplier)
+                        is_dead = enemy.take_damage(3 * damage_multiplier)
                         orbit_hit_this_frame = True
                         
                 if is_dead or enemy.health <= 0:
