@@ -858,6 +858,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
     
     active_dangers, active_lavas, active_endless_entities = [], [], []
     danger_spawn_timer, lava_spawn_timer = 3.0, 0.0
+    endless_danger_spawn_timer = 5.0  # Timer spawn DangerExplosion (alarm + ex) cho ENDLESS
     player_in_lava = False
 
     current_wave = 1
@@ -1212,6 +1213,28 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             player.in_lava = player_in_lava
             player.update_lava_logic(dt)
 
+            # --- SPAWN DANGER EXPLOSION (ALARM + EX) CHO ENDLESS ---
+            if game_state == "PLAYING":
+                endless_danger_spawn_timer -= dt
+                if endless_danger_spawn_timer <= 0:
+                    roll = random.random()
+                    spawn_count = 4 if roll < 0.05 else (2 if roll < 0.35 else 1)
+                    for _ in range(spawn_count):
+                        sx = camera_x + random.randint(80, WIDTH - 80)
+                        sy = camera_y + random.randint(80, HEIGHT - 80)
+                        active_dangers.append(DangerExplosion(sx, sy, game_assets['alarm'], game_assets['explosion_frames']))
+                    endless_danger_spawn_timer = random.uniform(4.0, 7.0)
+
+                for danger in active_dangers[:]:
+                    dmg_taken = danger.update(player, WIDTH, HEIGHT, mode_name, player_buffs['shield'])
+                    if dmg_taken > 0:
+                        if shield_hp > 0: shield_hp -= dmg_taken
+                        else:
+                            player.take_damage_and_knockback(dmg_taken, danger.x, danger.y, 25, WIDTH, HEIGHT, mode_name)
+                    if danger.state == "DONE": active_dangers.remove(danger)
+            else:
+                active_dangers.clear()
+
         for pw in player_weapons:
             if not hasattr(pw, 'hit_targets'):
                 pw.hit_targets = set()
@@ -1381,6 +1404,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             for lava in active_lavas: lava.draw(screen, camera_x, camera_y)
             for ent in active_endless_entities: ent.draw_shadow(screen, camera_x, camera_y)
             for ent in active_endless_entities: ent.draw(screen, camera_x, camera_y)
+            for danger in active_dangers: danger.draw(screen, camera_x, camera_y)
 
         for enemy in active_enemies: enemy.draw(screen, camera_x, camera_y)
         for proj in enemy_projectiles: proj.draw(screen, camera_x, camera_y)
