@@ -293,7 +293,7 @@ class RocketEntity:
         for e in entities:
             if check_collision_flexible(self.rect, self.x, self.y, e):
                 self.manager.particle_sys.spawn_explosion(self.x, self.y)
-                deal_damage(e, 30) 
+                deal_damage(e, 35) 
                 return False 
                 
         if self.x < -2000 or self.x > 5000 or self.y < -2000 or self.y > 5000: 
