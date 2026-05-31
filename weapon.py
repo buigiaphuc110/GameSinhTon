@@ -594,7 +594,7 @@ class WeaponEntity:
                 for entity in entities:
                     entity_rect = entity.rect if hasattr(entity, 'rect') else entity
                     if isinstance(entity_rect, pygame.Rect) and bullet_rect.colliderect(entity_rect):
-                        self._deal_damage_to_entity(entity, 18)
+                        self._deal_damage_to_entity(entity, 21)
                         hit_entity = True
                         break
                         
