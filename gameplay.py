@@ -1214,7 +1214,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         elif weapon.SELECTED_WEAPON in ['bomb', 'bomb1', 'bomb2']:
                             for other_enemy in active_enemies:
                                 if other_enemy != enemy and math.hypot(other_enemy.x - pw.x, other_enemy.y - pw.y) < 150:
-                                    other_enemy.take_damage(87 * damage_multiplier)
+                                    other_enemy.take_damage(90 * damage_multiplier)
                         
                         if weapon.SELECTED_WEAPON == 'wrench':
                             max_tanks = 3 if player_buffs['speed'] >= 3 else 2
