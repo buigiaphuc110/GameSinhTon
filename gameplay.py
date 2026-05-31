@@ -1444,7 +1444,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     elif buff_name == 'kaboom':
                         player.kaboom_level = player_buffs['kaboom']
                     
-                    max_shield = 50 * player_buffs['shield']
+                    max_shield = 30 * player_buffs['shield']
                     shield_hp = max_shield
                     
                     game_state = "WAVE_TRANSITION"
