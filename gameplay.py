@@ -100,7 +100,8 @@ class LavaPool:
         self.state, self.radius = "ACTIVE", int(110 / 2.25) 
 
     def update(self, camera_x, camera_y, width, height):
-        if not is_on_screen(self.x, self.y, camera_x, camera_y, width, height, buffer=200): self.state = "DONE"
+        # Chỉ xóa lava khi đã quá xa player (ngoài tầm 2 màn hình) để không spawn rồi mất ngay
+        if not is_on_screen(self.x, self.y, camera_x, camera_y, width, height, buffer=max(width, height)): self.state = "DONE"
 
     def draw_shadow(self, screen, camera_x, camera_y):
         if self.shadow_image: screen.blit(self.shadow_image, self.shadow_image.get_rect(center=(int(self.x - camera_x + 2), int(self.y - camera_y + 4))))
@@ -1199,10 +1200,12 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 if ent.state == "DONE": active_endless_entities.remove(ent)
                 elif is_on_screen(ent.x, ent.y, camera_x, camera_y, WIDTH, HEIGHT, buffer=0): ents_on_screen += 1
 
-            if lavas_on_screen < 1: lava_spawn_timer -= dt
-            if ents_on_screen < 4 or (lavas_on_screen < 1 and lava_spawn_timer <= 0):
-                spawn_x, spawn_y = get_valid_spawn_pos(camera_x, camera_y, WIDTH, HEIGHT, player.x, player.y, active_endless_entities, active_lavas)
-                if lavas_on_screen < 1 and lava_spawn_timer <= 0:
+            # Đếm lava trong vùng rộng hơn (buffer 300) để tránh spawn liên tục
+            lavas_nearby = sum(1 for lava in active_lavas if is_on_screen(lava.x, lava.y, camera_x, camera_y, WIDTH, HEIGHT, buffer=300))
+            if lavas_nearby < 1: lava_spawn_timer -= dt
+            if ents_on_screen < 4 or (lavas_nearby < 1 and lava_spawn_timer <= 0):
+                spawn_x, spawn_y = get_valid_spawn_pos(camera_x, camera_y, WIDTH, HEIGHT, player.x, player.y, active_endless_entities, active_lavas, min_player_dist=250)
+                if lavas_nearby < 1 and lava_spawn_timer <= 0:
                     active_lavas.append(LavaPool(spawn_x, spawn_y, game_assets['lava'], game_assets.get('lava_shadow')))
                     lava_spawn_timer = 8.0
                 elif ents_on_screen < 4:
