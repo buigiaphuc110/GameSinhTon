@@ -893,7 +893,8 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         damage_multiplier = 1.0 + (0.3 * player_buffs['dame'])
         if player_buffs['dame'] > 0:
             damage_multiplier += (player.dame_buff_kills * 0.0025)
-
+# ---> TRUYỀN BUFF DAMAGE SANG SPECIAL.PY <---
+            player.damage_multiplier = damage_multiplier
         is_gun = (weapon.SELECTED_WEAPON == 'gun')
         trigger_shoot = False
         target_x, target_y = 0, 0
@@ -919,25 +920,42 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                 player_special.trigger_random_skill()
 
         if trigger_shoot and game_state == "PLAYING":
-            # --- ĐÃ XÓA REQ_CD=50 TRẢ VỀ COOLDOWN CHUẨN GỐC ---
-            if current_time - weapon_cooldown_timer > max(50, 300 - player_buffs['speed']*60):
+            # --- CƠ CHẾ BẮN VÀ COOLDOWN ---
+            # Với Gun, Cooldown gốc là 300ms, không bị giảm bởi speed vì speed dùng để tăng số đạn bắn liên tiếp (Burst)
+            req_cd = 300 if is_gun else max(50, 300 - player_buffs['speed']*60)
+            
+            if current_time - weapon_cooldown_timer > req_cd:
                 is_special = player_special.on_player_throw_weapon(weapon.SELECTED_WEAPON, target_x, target_y, player.x, player.y)
                 if not is_special:
                     if is_gun:
-                        # --- CHỈ CHỈNH SÚNG BẮN LIÊN TIẾP NHIỀU ĐẠN ---
                         base_angle = math.atan2(target_y - player.y, target_x - player.x)
-                        num_bullets = 1 + player_buffs['speed'] 
+                        num_bullets = 1 + player_buffs['speed']  # Số đạn bắn liên tiếp mỗi loạt
+                        target_weapon_count = 1 + player_buffs['x2']  # Số nòng súng (bắn song song)
+                        muzzle_radius = 65
                         
-                        for i in range(num_bullets):
-                            spread_ang = math.radians(random.uniform(-12, 12)) if num_bullets > 1 else 0
-                            p_angle = base_angle + spread_ang
-                            player_extra_bullets.append({
-                                'x': player.x, 'y': player.y,
-                                'vx': math.cos(p_angle) * 30,
-                                'vy': math.sin(p_angle) * 30,
-                                'life': 30
-                            })
+                        # Truyền tín hiệu giật súng
+                        for pw in player_weapons:
+                            if pw.state == 'orbit':
+                                pw.recoil_timer = 10
+                                pw.shoot_angle = base_angle
+                                
+                        # Bắn từ tất cả các nòng súng (Buff X2)
+                        for b_idx in range(target_weapon_count):
+                            offset_ang = base_angle + math.pi/2
+                            offset_dist = (b_idx - (target_weapon_count - 1) / 2.0) * 18
+                            muzzle_x = player.x + math.cos(base_angle) * muzzle_radius + math.cos(offset_ang) * offset_dist
+                            muzzle_y = player.y + math.sin(base_angle) * muzzle_radius + math.sin(offset_ang) * offset_dist
                             
+                            # CƠ CHẾ BURST FIRE: Bắn liên tiếp nhiều viên (Buff Speed)
+                            for i in range(num_bullets):
+                                player_extra_bullets.append({
+                                    'x': muzzle_x, 'y': muzzle_y,
+                                    'vx': math.cos(base_angle) * 30,
+                                    'vy': math.sin(base_angle) * 30,
+                                    'life': 30,
+                                    'delay': i * 5  # Độ trễ 5 frames giữa mỗi viên để thành chuỗi đạn bay
+                                })
+                                
                         weapon_cooldown_timer = current_time
                         play_cached_sfx('gunsound')
                         
@@ -1095,8 +1113,12 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
 
         weapon_colliders = [obs.inflate(-35, -35) if isinstance(obs, pygame.Rect) else obs for obs in current_obstacles]
         
-        # --- FIX BUG: CẬP NHẬT ĐẠN CỦA SÚNG VÀ KIỂM TRA VA CHẠM VỚI VẬT CẢN (CÂY ĐÁ) LẪN QUÁI VẬT ---
+        # --- CẬP NHẬT ĐẠN SÚNG & VA CHẠM (Có độ trễ Delay) ---
         for b in player_extra_bullets[:]:
+            if b.get('delay', 0) > 0:
+                b['delay'] -= 1
+                continue
+                
             b['x'] += b['vx']
             b['y'] += b['vy']
             b['life'] -= 1
@@ -1114,7 +1136,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
             if not hit_something:
                 for enemy in active_enemies[:]:
                     if math.hypot(enemy.x - b['x'], enemy.y - b['y']) < enemy.radius + 8:
-                        is_dead = enemy.take_damage(25 * damage_multiplier) # Gun gây 25 sát thương cơ bản
+                        is_dead = enemy.take_damage(18 * damage_multiplier)
                         hit_something = True
                         play_cached_sfx('hit')
                         
@@ -1138,7 +1160,6 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                         break
                         
             if hit_something or b['life'] <= 0:
-                # TẠO HIỆU ỨNG NỔ NGAY LẬP TỨC CHO VIÊN ĐẠN SÚNG
                 active_weapon_explosions.append(weapon.WeaponExplosion(b['x'], b['y'], 'gun'))
                 player_extra_bullets.remove(b)
 
@@ -1150,7 +1171,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                     spawn_count = 5 if roll < 0.05 else (2 if roll < 0.45 else 1)
                     for _ in range(spawn_count):
                         active_dangers.append(DangerExplosion(random.randint(50, WIDTH - 50), random.randint(50, HEIGHT - 50), game_assets['alarm'], game_assets['explosion_frames']))
-                    danger_spawn_timer = 3.0 
+                    danger_spawn_timer = 3.0
                 
                 for danger in active_dangers[:]:
                     dmg_taken = danger.update(player, WIDTH, HEIGHT, mode_name, player_buffs['shield'])
@@ -1160,7 +1181,7 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
                             player.take_damage_and_knockback(dmg_taken, danger.x, danger.y, 25, WIDTH, HEIGHT, mode_name)
                     if danger.state == "DONE": active_dangers.remove(danger)
             else:
-                active_dangers.clear() 
+                active_dangers.clear()
                 
         elif mode_name == 'ENDLESS':
             player_in_lava = False
@@ -1404,6 +1425,8 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
 
         # VẼ ĐẠN CỦA SÚNG KHI BẮN BẰNG CLICK CHUỘT
         for b in player_extra_bullets:
+            if b.get('delay', 0) > 0:
+                continue  # Nếu đạn đang chờ delay burst thì chưa vẽ ra
             bx = int(b['x'] - camera_x)
             by = int(b['y'] - camera_y)
             tracer_x = bx - b['vx'] * 0.5
