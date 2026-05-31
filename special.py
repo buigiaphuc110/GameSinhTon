@@ -244,11 +244,17 @@ class ToxicCloudEntity:
             
         if current_time - self.last_damage_tick > self.damage_interval:
             self.last_damage_tick = current_time
+            
+            # [TÍNH DAMAGE BUFF] Lấy hệ số từ biến toàn cục weapon.CURRENT_PLAYER
+            import weapon
+            player = getattr(weapon, 'CURRENT_PLAYER', None)
+            dmg_mul = getattr(player, 'damage_multiplier', 1.0) if player else 1.0
+            
             for e in entities:
                 ex = getattr(e, 'x', None)
                 ey = getattr(e, 'y', None)
                 if ex is not None and ey is not None and math.hypot(ex - self.x, ey - self.y) < 85: 
-                    deal_damage(e, 6) 
+                    deal_damage(e, int(6 * dmg_mul)) 
         return True
 
     def draw(self, surface, camera_x=0, camera_y=0):
@@ -293,7 +299,15 @@ class RocketEntity:
         for e in entities:
             if check_collision_flexible(self.rect, self.x, self.y, e):
                 self.manager.particle_sys.spawn_explosion(self.x, self.y)
-                deal_damage(e, 35) 
+                
+                # [TÍNH DAMAGE BUFF] Ưu tiên tìm trong manager.player, nếu không thấy sẽ tìm ở biến toàn cục
+                player = self.manager.player if self.manager else None
+                if not player:
+                    import weapon
+                    player = getattr(weapon, 'CURRENT_PLAYER', None)
+                dmg_mul = getattr(player, 'damage_multiplier', 1.0) if player else 1.0
+                
+                deal_damage(e, int(35 * dmg_mul)) 
                 return False 
                 
         if self.x < -2000 or self.x > 5000 or self.y < -2000 or self.y > 5000: 
@@ -412,7 +426,15 @@ class SubFlowerEntity:
             hit = False
             for e in entities:
                 if check_collision_flexible(self.rect, self.x, self.y, e):
-                    deal_damage(e, 30) 
+                    
+                    # [TÍNH DAMAGE BUFF] Tìm hệ số buff dame cho Hoa Nhỏ
+                    player = self.manager.player if self.manager else None
+                    if not player:
+                        import weapon
+                        player = getattr(weapon, 'CURRENT_PLAYER', None)
+                    dmg_mul = getattr(player, 'damage_multiplier', 1.0) if player else 1.0
+                    
+                    deal_damage(e, int(30 * dmg_mul)) 
                     hit = True
                     # CƠ CHẾ MỚI: Hồi 1 máu cho player khi ném trúng kẻ địch (Hoa nhỏ Flower1)
                     if self.manager and self.manager.player:
@@ -465,9 +487,15 @@ class Flower2Entity:
             current_time = pygame.time.get_ticks()
             if current_time - self.last_orbit_hit_time > 400:
                 hit_anything = False
+                
+                # [TÍNH DAMAGE BUFF] Lấy hệ số buff trạng thái xoay quanh từ biến weapon toàn cục
+                import weapon
+                player = getattr(weapon, 'CURRENT_PLAYER', None)
+                dmg_mul = getattr(player, 'damage_multiplier', 1.0) if player else 1.0
+                
                 for e in entities:
                     if check_collision_flexible(self.rect, self.x, self.y, e):
-                        deal_damage(e, 15)
+                        deal_damage(e, int(15 * dmg_mul))
                         hit_anything = True
                 if hit_anything: 
                     self.last_orbit_hit_time = current_time
@@ -481,9 +509,17 @@ class Flower2Entity:
             self.rect.center = (int(self.x), int(self.y))
             
             hit = False
+            
+            # [TÍNH DAMAGE BUFF] Lấy hệ số buff trạng thái ném hoa lớn đi
+            player = self.manager_ref.player if self.manager_ref else None
+            if not player:
+                import weapon
+                player = getattr(weapon, 'CURRENT_PLAYER', None)
+            dmg_mul = getattr(player, 'damage_multiplier', 1.0) if player else 1.0
+            
             for e in entities:
                 if check_collision_flexible(self.rect, self.x, self.y, e):
-                    deal_damage(e, 65) 
+                    deal_damage(e, int(65 * dmg_mul)) 
                     hit = True
                     # CƠ CHẾ MỚI: Hồi 1 máu cho player khi ném trúng kẻ địch (Hoa lớn Flower2)
                     if self.manager_ref and self.manager_ref.player:

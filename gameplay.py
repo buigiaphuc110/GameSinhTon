@@ -895,7 +895,8 @@ def run_game_mode(screen, clock, WIDTH, HEIGHT, game_assets, transition_func, mo
         damage_multiplier = 1.0 + (0.3 * player_buffs['dame'])
         if player_buffs['dame'] > 0:
             damage_multiplier += (player.dame_buff_kills * 0.0025)
-
+# ---> THÊM DÒNG NÀY ĐỂ TRUYỀN BUFF SANG SPECIAL.PY <---
+            player.damage_multiplier = damage_multiplier
         is_gun = (weapon.SELECTED_WEAPON == 'gun')
         trigger_shoot = False
         target_x, target_y = 0, 0
